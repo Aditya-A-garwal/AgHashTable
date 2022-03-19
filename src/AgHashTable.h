@@ -12,7 +12,12 @@
 #include <type_traits>
 #include <limits>
 
-
+/**
+ * @brief
+ *
+ * @tparam key_t
+ * @tparam mHashFunc
+ */
 template <typename key_t, auto mHashFunc>
 class AgHashTable {
 
@@ -20,7 +25,10 @@ class AgHashTable {
 NO_TEST_MODE(protected:)
 TEST_MODE(public:)
 
-
+    /**
+     * @brief
+     *
+     */
     struct node_t {
         // pointer to next node in the linked list
         node_t      *mPtr   {nullptr};
@@ -28,6 +36,10 @@ TEST_MODE(public:)
         key_t       mKey;
     };
 
+    /**
+     * @brief
+     *
+     */
     struct bucket_t {
         // number of elements currently in the bucket
         uint64_t    mSize   {0};
@@ -57,10 +69,10 @@ TEST_MODE(public:)
 
     bucket_t        *mBuckets;
 
-    uint64_t        mSize;
+    uint64_t        mSize           {0};
 
     TEST_MODE(
-    uint64_t        mSlots;
+    uint64_t        mSlots          {0};
     )
 
 
@@ -80,58 +92,85 @@ NO_TEST_MODE(public:)
     uint64_t            size    () const;
 };
 
-
-template <typename val_t, auto mHashFunc>
-AgHashTable<val_t, mHashFunc>::AgHashTable ()
+/**
+ * @brief                           Construct a new AgHashTable<val_t, mHashFunc>::AgHashTable object
+ */
+template <typename key_t, auto mHashFunc>
+AgHashTable<key_t, mHashFunc>::AgHashTable ()
 {
+    // allocate array of buckets, return if could not allocate
     mBuckets        = new (std::nothrow) bucket_t[sBucketCount];
-
     if (mBuckets == nullptr) {
-        TEST_MODE(std::cout << "Could not allocate buckets\n";)
+        TEST_MODE (std::cout << "Could not allocate buckets while constructing\n";)
         return;
     }
 }
 
+/**
+ * @brief                           Destroy the AgHashTable<val_t, mHashFunc>::AgHashTable object
+ */
 template <typename val_t, auto mHashFunc>
 AgHashTable<val_t, mHashFunc>::~AgHashTable ()
 {
     delete[] mBuckets;
 }
 
+/**
+ * @brief                           Attempts to insert a key into the hash table
+ *
+ * @param pKey                      Key to insert into the table
+ *
+ * @return true                     If no duplicate key was found and was inserted succesfully
+ * @return false                    If key could not be inserted succesfully
+ */
 template <typename key_t, auto mHashFunc>
 bool
 AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
 {
+    // hash of the supplied key to insert
     uint64_t    keyHash;
+    // bucket in which the key will be inserted
     uint64_t    bucketId;
+    // position in bucket in which the key will be inserted
     uint64_t    bucketPos;
 
+    // pointer to node ptr, used while iterating over the linked list in the slot
     node_ptr_t  *listElem;
+
+    // pointer to allocated new node, used after valid empty position has been found
     node_ptr_t  node;
 
+    // calculate the hash of they key and find its bucket and position in the bucket
+    // the bucket is the sBucketSizeLog Most Significant bits, while the
+    // position in the bucket is the remaining Least Significant bits of the hash
     keyHash                     = mHashFunc (pKey);
-
     bucketId                    = keyHash >> sBucketSizeLog;
     bucketPos                   = keyHash & ((1ULL << sBucketSizeLog) - 1);
 
+    // if the bucket has not been allocated yet, then it needs to be
     if (mBuckets[bucketId].mAr == nullptr) {
 
-        mBuckets[bucketId].mAr  = new (std::nothrow) node_ptr_t[1ULL << sBucketSizeLog];
-        if (mBuckets[bucketId].mAr == nullptr) {
-            TEST_MODE(
-            std::cout << "Could not allocate buckets while inserting\n";
-            )
+        // allocate the array of the current bucket, return failed insertion if could not allocate
+        mBuckets[bucketId].mAr  = new (std::nothrow) node_ptr_t[sBucketSize];
+        if (mBuckets [bucketId].mAr == nullptr) {
+            TEST_MODE(std::cout << "Could not allocate bucket array while inserting\n";)
             return false;
         }
 
+        // go over each slot in the bucket and make the linked list point to nullptr
         for (uint64_t i = 0; i < sBucketSize; ++i) {
             mBuckets[bucketId].mAr[i]   = nullptr;
         }
     }
 
+    // get a pointer to the pointer to the next node
+    // pointer to pointer allows for removing special head case
     listElem                    = &mBuckets[bucketId].mAr[bucketPos];
+
+    // while the pointer being pointed to, does not point to null, the end of the list has not been reached
     while ((*listElem) != nullptr) {
 
+        // in case a matching element was found, return failed insertion (duplicates are not allowed)
         if ((*listElem)->mKey == pKey) {
             return false;
         }
@@ -139,53 +178,62 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
         listElem    = &((*listElem)->mPtr);
     }
 
+    // allocate a new node containing the key, return failed insertion if could not allocate
     node                        = new (std::nothrow) node_t {nullptr, pKey};
     if (node == nullptr) {
-        TEST_MODE(
-        std::cout << "Could not allocate new node while inserting\n";
-        )
+        TEST_MODE (std::cout << "Could not allocate new node while inserting\n";)
         return false;
     }
 
-    TEST_MODE(
-    if (mBuckets[bucketId].mAr[bucketPos] == nullptr) {
-        mSlots                  += 1;
-    }
-    )
-
+    // place the new node at this position
     (*listElem)                 = node;
 
+    // increment size of bucket and size of table
     mBuckets[bucketId].mSize    += 1;
     mSize                       += 1;
 
     return true;
 }
 
+/**
+ * @brief                           Searches for a key in the hashtable
+ *
+ * @param pKey                      Key to search for
+ *
+ * @return true                     If key exists in the hashtable
+ * @return false                    If key does not exist in the hashtable
+ */
 template <typename key_t, auto mHashFunc>
 bool
 AgHashTable<key_t, mHashFunc>::find (const key_t pKey) const
 {
+    // hash of the supplied key to insert
     uint64_t    keyHash;
+    // bucket in which the key will be inserted
     uint64_t    bucketId;
+    // position in bucket in which the key will be inserted
     uint64_t    bucketPos;
 
+    // pointer to node, used while iterating over linked list to find matching key
     node_ptr_t  listElem;
 
+    // calculate the hash of they key and find its bucket and position in the bucket
+    // the bucket is the sBucketSizeLog Most Significant bits, while the
+    // position in the bucket is the remaining Least Significant bits of the hash
     keyHash         = mHashFunc (pKey);
-
     bucketId        = keyHash >> sBucketSizeLog;
     bucketPos       = keyHash & ((1ULL << sBucketSizeLog) - 1);
 
-    // this value does not exist in the hashtable
+    // the bucket itself does not exist, search unsuccesful
     if (mBuckets[bucketId].mAr == nullptr) {
         return false;
     }
 
     // get head of linked list at that position and iterate over it while trying to find the value
     listElem        = mBuckets[bucketId].mAr[bucketPos];
-
     while (listElem != nullptr) {
 
+        // if matching key was found, return succesful search
         if (listElem->mKey == pKey) {
             return true;
         }
@@ -195,45 +243,61 @@ AgHashTable<key_t, mHashFunc>::find (const key_t pKey) const
     return false;
 }
 
+/**
+ * @brief                           Attempts to erase a key from the hash table
+ *
+ * @param pKey                      Key to erase from the table
+ *
+ * @return true                     If the key was succesfully found and removed
+ * @return false                    If a matching key could not be found or removed
+ */
 template <typename key_t, auto mHashFunc>
 bool
 AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
 {
+    // hash of the supplied key to erase
     uint64_t    keyHash;
+    // bucket in which the key should be present
     uint64_t    bucketId;
+    // position in bucket at which they key should be present
     uint64_t    bucketPos;
 
+    // pointer to node ptr, used while iterating over the linked list in the slot
     node_ptr_t  *listElem;
+
+    // pointer to allocated new node, used while deleting the key's node
     node_ptr_t  node;
 
+    // calculate the hash of they key and find its bucket and position in the bucket
+    // the bucket is the sBucketSizeLog Most Significant bits, while the
+    // position in the bucket is the remaining Least Significant bits of the hash
     keyHash         = mHashFunc (pKey);
-
     bucketId        = keyHash >> sBucketSizeLog;
     bucketPos       = keyHash & ((1ULL << sBucketSizeLog) - 1);
 
+    // if the bucket itself does not exist, return failed erase
     if (mBuckets[bucketId].mAr == nullptr) {
         return false;
     }
 
-    listElem        = &mBuckets[bucketId].mAr[bucketPos];
+    // get a pointer to the pointer to the next node
+    // pointer to pointer allows for removing special head case
+    listElem                    = &mBuckets[bucketId].mAr[bucketPos];
 
+    // while the pointer being pointed to, does not point to null, the end of the list has not been reached
     while ((*listElem) != nullptr) {
 
+        // if matching key was found
         if ((*listElem)->mKey == pKey) {
 
+            // take out the current node and make the previous node point to the next node, delete the node
             node                        = *listElem;
             (*listElem)                 = node->mPtr;
 
+            delete node;
+
             mBuckets[bucketId].mSize    -= 1;
             mSize                       -= 1;
-
-            TEST_MODE(
-            if (mBuckets[bucketId].mAr[bucketPos] == nullptr) {
-                mSlots                  -= 1;
-            }
-            )
-
-            delete node;
 
             return true;
         }
@@ -244,6 +308,11 @@ AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
     return false;
 }
 
+/**
+ * @brief                           Returns the number of elements in the hashtable
+ *
+ * @return uint64_t                 Number of elements in the table
+ */
 template <typename key_t, auto mHashFunc>
 uint64_t
 AgHashTable<key_t, mHashFunc>::size () const
