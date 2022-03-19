@@ -40,6 +40,7 @@ TEST (Smoke, SmokeTest)
 
     for (auto i = lo; i <= hi; ++i) {
         ASSERT_TRUE (table.erase (i)) << "i: " << i << '\n';
+        ASSERT_FALSE (table.find (i)) << "i: " << i << '\n';
         ASSERT_EQ (table.size (), hi - i);
     }
 
