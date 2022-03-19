@@ -12,11 +12,13 @@
 #include <type_traits>
 #include <limits>
 
+
+
 /**
- * @brief
+ * @brief                   AgHashtable is an implementation of the hashtable data structure
  *
- * @tparam key_t
- * @tparam mHashFunc
+ * @tparam key_t            Type of keys held by the hashtable
+ * @tparam mHashFunc        Hash Function for calculating the hashes of keys
  */
 template <typename key_t, auto mHashFunc>
 class AgHashTable {
@@ -26,7 +28,7 @@ NO_TEST_MODE(protected:)
 TEST_MODE(public:)
 
     /**
-     * @brief
+     * @brief               Node in the linked list at a slot
      *
      */
     struct node_t {
@@ -37,7 +39,7 @@ TEST_MODE(public:)
     };
 
     /**
-     * @brief
+     * @brief               Structure for encapsulating buckets
      *
      */
     struct bucket_t {
@@ -67,27 +69,39 @@ TEST_MODE(public:)
 
     static_assert ((sBucketSize * sBucketCount) == sMaxHashValue);
 
+    // member array to buckets
     bucket_t        *mBuckets;
 
+    // number of elements in the table
     uint64_t        mSize           {0};
 
     TEST_MODE(
+    // number of consumed slots in the table (should be as much as possible ideally)
     uint64_t        mSlots          {0};
     )
 
 
 NO_TEST_MODE(public:)
 
+    //      Constructors
 
     AgHashTable     ();
     AgHashTable     (const AgHashTable<key_t, mHashFunc> &pOther)   = delete;
 
+    //      Destructor
+
     ~AgHashTable    ();
 
+    //      Modifiers
 
     bool                insert  (const key_t pKey);
-    bool                find    (const key_t pKey) const;
     bool                erase   (const key_t pKey);
+
+    //      Searching
+
+    bool                find    (const key_t pKey) const;
+
+    //      Getters
 
     uint64_t            size    () const;
 };
