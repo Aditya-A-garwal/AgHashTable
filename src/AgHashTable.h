@@ -1,3 +1,12 @@
+/**
+ * @file            AgHashTable.h
+ * @author          Aditya Agarwal (aditya.agarwal@dumblebots.com)
+ *
+ * @brief           AgHashTable class
+ *
+ */
+
+
 #ifndef AG_HASH_TABLE_GUARD_H
 #define AG_HASH_TABLE_GUARD_H
 
@@ -12,6 +21,7 @@
 #include <type_traits>
 #include <limits>
 
+#include "AgHashFunctions.h"
 
 
 /**
@@ -20,7 +30,7 @@
  * @tparam key_t            Type of keys held by the hashtable
  * @tparam mHashFunc        Hash Function for calculating the hashes of keys
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc = ag_pearson_16_hash>
 class AgHashTable {
 
 
@@ -36,6 +46,8 @@ TEST_MODE(public:)
         node_t      *mPtr   {nullptr};
         // the key value
         key_t       mKey;
+
+        ~node_t () { delete mPtr; }
     };
 
     /**
@@ -47,15 +59,13 @@ TEST_MODE(public:)
         uint64_t    mSize   {0};
         // pointer to the array storing the slots in the bucket
         node_t      **mAr   {nullptr};
-
-        ~bucket_t () { delete[] mAr; };
     };
 
     using       node_ptr_t  = node_t *;
 
     // make sure that the hash function is callable and returns an unsigned integral type of not more than 16 bits
-    static_assert (std::is_invocable <decltype (mHashFunc), key_t>::value, "hash function should be callable");
-    using       hash_t      = typename std::invoke_result<decltype (mHashFunc), key_t>::type;
+    static_assert (std::is_invocable <decltype (mHashFunc), const uint8_t *, const uint64_t>::value, "hash function should be callable");
+    using       hash_t      = typename std::invoke_result<decltype (mHashFunc), const uint8_t *, const uint64_t>::type;
     static_assert (std::is_unsigned<hash_t>::value, "hash function should return unsigned type");
     static_assert (sizeof (hash_t) <= 2, "hash function should be 16 bit or less");
 
@@ -85,25 +95,29 @@ NO_TEST_MODE(public:)
 
     //      Constructors
 
-    AgHashTable     ();
-    AgHashTable     (const AgHashTable<key_t, mHashFunc> &pOther)   = delete;
+    AgHashTable                                 ();
+    AgHashTable                                 (const AgHashTable<key_t, mHashFunc> &pOther)   = delete;
 
     //      Destructor
 
-    ~AgHashTable    ();
+    ~AgHashTable                                ();
 
     //      Modifiers
 
-    bool                insert  (const key_t pKey);
-    bool                erase   (const key_t pKey);
+    bool                insert                  (const key_t pKey);
+    bool                erase                   (const key_t pKey);
 
     //      Searching
 
-    bool                find    (const key_t pKey) const;
+    bool                find                    (const key_t pKey) const;
 
     //      Getters
 
-    uint64_t            size    () const;
+    uint64_t            size                    () const;
+    uint64_t            maxBuckets              () const;
+    uint64_t            bucketsUsed             () const;
+    uint64_t            maxBucketSize           () const;
+    uint64_t            bucketSize              (const uint64_t pIndex) const;
 };
 
 /**
@@ -126,6 +140,22 @@ AgHashTable<key_t, mHashFunc>::AgHashTable ()
 template <typename val_t, auto mHashFunc>
 AgHashTable<val_t, mHashFunc>::~AgHashTable ()
 {
+    for (uint64_t bucket = 0; bucket < sBucketCount; ++bucket) {
+
+        // if the current bucket has never been allocated, skip it
+        if (mBuckets[bucket].mAr == nullptr) {
+            continue;
+        }
+
+        // go through every slot and delete the entire linked list at that slot
+        for (uint64_t slot = 0; slot < sBucketSize; ++slot) {
+            delete mBuckets[bucket].mAr[slot];
+        }
+
+        // delete this bucket
+        delete[] mBuckets[bucket].mAr;
+    }
+
     delete[] mBuckets;
 }
 
@@ -157,7 +187,7 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
     // calculate the hash of they key and find its bucket and position in the bucket
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
-    keyHash                     = mHashFunc (pKey);
+    keyHash                     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
     bucketId                    = keyHash >> sBucketSizeLog;
     bucketPos                   = keyHash & ((1ULL << sBucketSizeLog) - 1);
 
@@ -234,7 +264,7 @@ AgHashTable<key_t, mHashFunc>::find (const key_t pKey) const
     // calculate the hash of they key and find its bucket and position in the bucket
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
-    keyHash         = mHashFunc (pKey);
+    keyHash         = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
     bucketId        = keyHash >> sBucketSizeLog;
     bucketPos       = keyHash & ((1ULL << sBucketSizeLog) - 1);
 
@@ -285,7 +315,7 @@ AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
     // calculate the hash of they key and find its bucket and position in the bucket
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
-    keyHash         = mHashFunc (pKey);
+    keyHash         = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
     bucketId        = keyHash >> sBucketSizeLog;
     bucketPos       = keyHash & ((1ULL << sBucketSizeLog) - 1);
 
@@ -307,6 +337,7 @@ AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
             // take out the current node and make the previous node point to the next node, delete the node
             node                        = *listElem;
             (*listElem)                 = node->mPtr;
+            node->mPtr                  = nullptr;
 
             delete node;
 

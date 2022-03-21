@@ -3,6 +3,9 @@
 
 #include <vector>
 
+#include <set>
+#include <unordered_set>
+
 #define AG_TEST_MODE
 #include "AgHashTable.h"
 
@@ -343,31 +346,31 @@ main (void)
 
     // std::cout << "Inserted and found all\n";
 
-    AgHashTable<int32_t, id>    table;
+    // AgHashTable<int32_t, id>    table;
 
-    for (int i = -100'000; i < 100'000; ++i) {
-        if (table.insert (i) != true) {
-            std::cout << "Could not insert " << i << std::endl;
-        }
-    }
+    // for (int i = -100'000; i < 100'000; ++i) {
+    //     if (table.insert (i) != true) {
+    //         std::cout << "Could not insert " << i << std::endl;
+    //     }
+    // }
 
-    std::cout << "Inserted all elements\n";
+    // std::cout << "Inserted all elements\n";
 
-    for (int i = -100'000; i < 100'000; ++i) {
-        if (table.find (i) != true) {
-            std::cout << "Could not find " << i << std::endl;
-        }
-    }
+    // for (int i = -100'000; i < 100'000; ++i) {
+    //     if (table.find (i) != true) {
+    //         std::cout << "Could not find " << i << std::endl;
+    //     }
+    // }
 
-    std::cout << "Found all elements\n";
+    // std::cout << "Found all elements\n";
 
-    for (int i = -100'000; i < 100'000; ++i) {
-        if (table.erase (i) != true) {
-            std::cout << "Could not erase " << i << std::endl;
-        }
-    }
+    // for (int i = -100'000; i < 100'000; ++i) {
+    //     if (table.erase (i) != true) {
+    //         std::cout << "Could not erase " << i << std::endl;
+    //     }
+    // }
 
-    std::cout << "Erased all elements\n";
+    // std::cout << "Erased all elements\n";
 
     return 0;
 }
