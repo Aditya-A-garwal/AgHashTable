@@ -1,3 +1,11 @@
+/**
+ * @file            AgHashFunctions.h
+ * @author          Aditya Agarwal (aditya.agarwal@dumblebots.com)
+ *
+ * @brief           Default hash functions to be used by AgHashTable class
+ *
+ */
+
 uint16_t
 ag_pearson_16_hash (const uint8_t *pBytes, const uint64_t pLen)
 {
