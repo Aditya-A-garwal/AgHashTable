@@ -85,10 +85,8 @@ TEST_MODE(public:)
     // number of elements in the table
     uint64_t        mSize           {0};
 
-    TEST_MODE(
-    // number of consumed slots in the table (should be as much as possible ideally)
-    uint64_t        mSlots          {0};
-    )
+    // number of buckets which have atleast one element
+    uint64_t        mBucketsUsed    {0};
 
 
 NO_TEST_MODE(public:)
@@ -233,6 +231,10 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
     (*listElem)                 = node;
 
     // increment size of bucket and size of table
+    if (mBuckets[bucketId].mSize == 0) {
+        mBucketsUsed            += 1;
+    }
+
     mBuckets[bucketId].mSize    += 1;
     mSize                       += 1;
 
@@ -344,6 +346,10 @@ AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
             mBuckets[bucketId].mSize    -= 1;
             mSize                       -= 1;
 
+            if (mBuckets[bucketId].mSize == 0) {
+                mBucketsUsed            += 1;
+            }
+
             return true;
         }
 
@@ -363,6 +369,55 @@ uint64_t
 AgHashTable<key_t, mHashFunc>::size () const
 {
     return mSize;
+}
+
+/**
+ * @brief                           Returns the maximum number of buckets which the table can have
+ *
+ * @return uint64_t                 Number of buckets which the hash table can have
+ */
+template <typename key_t, auto mHashFunc>
+uint64_t
+AgHashTable<key_t, mHashFunc>::maxBuckets () const
+{
+    return sBucketCount;
+}
+
+/**
+ * @brief                           Returns the number of buckets currently being used
+ *
+ * @return uint64_t                 Number of buckets currently being used
+ */
+template <typename key_t, auto mHashFunc>
+uint64_t
+AgHashTable<key_t, mHashFunc>::bucketsUsed () const
+{
+    return mBucketsUsed;
+}
+
+/**
+ * @brief                           Returns the maximum number of elements a bucket can have
+ *
+ * @return uint64_t                 Number of elements which a bucket can have
+ */
+template <typename key_t, auto mHashFunc>
+uint64_t
+AgHashTable<key_t, mHashFunc>::maxBucketSize () const
+{
+    return sBucketSize;
+}
+
+/**
+ * @brief                           Returns the number of elements in a given bucket
+ *
+ * @param pIndex                    Index of the bucket whose size is to be returned
+ * @return uint64_t                 Number of elements in bucket at position pIndex
+ */
+template <typename key_t, auto mHashFunc>
+uint64_t
+AgHashTable<key_t, mHashFunc>::bucketSize (const uint64_t pIndex) const
+{
+    return mBuckets[pIndex].mSize;
 }
 
 #undef  TEST_MODE
