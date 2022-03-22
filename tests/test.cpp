@@ -7,10 +7,12 @@
 
 TEST (Smoke, SmokeTest)
 {
-    constexpr int64_t                       lo  = -100'000;
-    constexpr int64_t                       hi  = 100'000;
+    constexpr int64_t               lo  = -100'000;
+    constexpr int64_t               hi  = 100'000;
 
-    AgHashTable<int64_t>         table;
+    AgHashTable<int64_t>            table;
+
+    ASSERT_TRUE (table.initialized ());
 
     for (auto i = lo; i <= hi; ++i) {
         ASSERT_TRUE (table.insert (i)) << "i: " << i << '\n';
