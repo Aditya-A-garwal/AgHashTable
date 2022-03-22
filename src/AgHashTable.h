@@ -21,7 +21,7 @@
 #include <type_traits>
 #include <limits>
 
-#include "AgHashFunctions.h"
+#include "AgHashFunctions.hpp"
 
 
 /**
@@ -34,18 +34,16 @@ template <typename key_t, auto mHashFunc = ag_pearson_16_hash>
 class AgHashTable {
 
 
-NO_TEST_MODE(protected:)
-TEST_MODE(public:)
+protected:
 
     /**
      * @brief               Node in the linked list at a slot
      *
      */
     struct node_t {
-        // pointer to next node in the linked list
-        node_t      *mPtr   {nullptr};
-        // the key value
-        key_t       mKey;
+
+        node_t      *mPtr       {nullptr};      /* pointer to next node in the linked list */
+        key_t       mKey;                       /* the key value */
 
         ~node_t () { delete mPtr; }
     };
@@ -55,10 +53,9 @@ TEST_MODE(public:)
      *
      */
     struct bucket_t {
-        // number of elements currently in the bucket
-        uint64_t    mSize   {0};
-        // pointer to the array storing the slots in the bucket
-        node_t      **mAr   {nullptr};
+
+        uint64_t    mSize       {0};            /* number of elements currently in the bucket */
+        node_t      **mAr       {nullptr};      /* pointer to the array storing the slots in the bucket */
     };
 
     using       node_ptr_t  = node_t *;
@@ -69,27 +66,18 @@ TEST_MODE(public:)
     static_assert (std::is_unsigned<hash_t>::value, "hash function should return unsigned type");
     static_assert (sizeof (hash_t) <= 2, "hash function should be 16 bit or less");
 
-    static constexpr uint64_t   sMaxHashValueLog    = sizeof (hash_t) << 3;
-    static constexpr uint64_t   sBucketSizeLog      = sMaxHashValueLog >> 1;
-    static constexpr uint64_t   sBucketCountLog     = sMaxHashValueLog >> 1;
+    static constexpr uint64_t   sDistinctHash       = 1ULL << (sizeof (hash_t) * 8ULL);     /* Number of distinct hash values possible */
+    static constexpr uint64_t   sBucketCapacity     = 1ULL << 8ULL;                         /* Number of slots in a bucket */
+    static constexpr uint64_t   sBucketCount        = 1ULL << 8ULL;                         /* Number of distinct buckets */
 
-    static constexpr uint64_t   sMaxHashValue       = 1ULL << sMaxHashValueLog;
-    static constexpr uint64_t   sBucketSize         = 1ULL << sBucketSizeLog;
-    static constexpr uint64_t   sBucketCount        = 1ULL << sBucketCountLog;
+    static_assert ((sBucketCapacity * sBucketCount) == sDistinctHash);
 
-    static_assert ((sBucketSize * sBucketCount) == sMaxHashValue);
-
-    // member array to buckets
-    bucket_t        *mBuckets;
-
-    // number of elements in the table
-    uint64_t        mSize           {0};
-
-    // number of buckets which have atleast one element
-    uint64_t        mBucketsUsed    {0};
+    bucket_t        *mBuckets;                  /* member array to buckets */
+    uint64_t        mSize           {0ULL};     /* number of elements in the table */
+    uint64_t        mBucketsUsed    {0ULL};     /* number of buckets which have atleast one element */
 
 
-NO_TEST_MODE(public:)
+public:
 
     //      Constructors
 
@@ -112,14 +100,14 @@ NO_TEST_MODE(public:)
     //      Getters
 
     uint64_t            size                    () const;
-    uint64_t            maxBuckets              () const;
-    uint64_t            bucketsUsed             () const;
-    uint64_t            maxBucketSize           () const;
-    uint64_t            bucketSize              (const uint64_t pIndex) const;
+    uint64_t            bucket_count            () const;
+    uint64_t            buckets_used            () const;
+    uint64_t            bucket_capacity         () const;
+    uint64_t            bucket_size             (const uint64_t pIndex) const;
 };
 
 /**
- * @brief                           Construct a new AgHashTable<val_t, mHashFunc>::AgHashTable object
+ * @brief                           Construct a new AgHashTable<key_t, mHashFunc>::AgHashTable object
  */
 template <typename key_t, auto mHashFunc>
 AgHashTable<key_t, mHashFunc>::AgHashTable ()
@@ -133,10 +121,10 @@ AgHashTable<key_t, mHashFunc>::AgHashTable ()
 }
 
 /**
- * @brief                           Destroy the AgHashTable<val_t, mHashFunc>::AgHashTable object
+ * @brief                           Destroy the AgHashTable<key_t, mHashFunc>::AgHashTable object
  */
-template <typename val_t, auto mHashFunc>
-AgHashTable<val_t, mHashFunc>::~AgHashTable ()
+template <typename key_t, auto mHashFunc>
+AgHashTable<key_t, mHashFunc>::~AgHashTable ()
 {
     for (uint64_t bucket = 0; bucket < sBucketCount; ++bucket) {
 
@@ -146,7 +134,7 @@ AgHashTable<val_t, mHashFunc>::~AgHashTable ()
         }
 
         // go through every slot and delete the entire linked list at that slot
-        for (uint64_t slot = 0; slot < sBucketSize; ++slot) {
+        for (uint64_t slot = 0; slot < sBucketCapacity; ++slot) {
             delete mBuckets[bucket].mAr[slot];
         }
 
@@ -169,38 +157,33 @@ template <typename key_t, auto mHashFunc>
 bool
 AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
 {
-    // hash of the supplied key to insert
-    uint64_t    keyHash;
-    // bucket in which the key will be inserted
-    uint64_t    bucketId;
-    // position in bucket in which the key will be inserted
-    uint64_t    bucketPos;
+    uint64_t    keyHash;                        // hash of the supplied key to insert
+    uint64_t    bucketId;                       // bucket in which the key will be inserted
+    uint64_t    bucketPos;                      // position in bucket in which the key will be inserted
 
-    // pointer to node ptr, used while iterating over the linked list in the slot
-    node_ptr_t  *listElem;
+    node_ptr_t  *listElem;                      // pointer to node ptr, for iterating over the linked list in the slot
 
-    // pointer to allocated new node, used after valid empty position has been found
-    node_ptr_t  node;
+    node_ptr_t  node;                           // pointer to allocated new node
 
     // calculate the hash of they key and find its bucket and position in the bucket
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
     keyHash                     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    bucketId                    = keyHash >> sBucketSizeLog;
-    bucketPos                   = keyHash & ((1ULL << sBucketSizeLog) - 1);
+    bucketId                    = keyHash / sBucketCapacity;
+    bucketPos                   = keyHash % sBucketCapacity;
 
     // if the bucket has not been allocated yet, then it needs to be
     if (mBuckets[bucketId].mAr == nullptr) {
 
         // allocate the array of the current bucket, return failed insertion if could not allocate
-        mBuckets[bucketId].mAr  = new (std::nothrow) node_ptr_t[sBucketSize];
+        mBuckets[bucketId].mAr  = new (std::nothrow) node_ptr_t[sBucketCapacity];
         if (mBuckets [bucketId].mAr == nullptr) {
             TEST_MODE(std::cout << "Could not allocate bucket array while inserting\n";)
             return false;
         }
 
         // go over each slot in the bucket and make the linked list point to nullptr
-        for (uint64_t i = 0; i < sBucketSize; ++i) {
+        for (uint64_t i = 0; i < sBucketCapacity; ++i) {
             mBuckets[bucketId].mAr[i]   = nullptr;
         }
     }
@@ -253,22 +236,18 @@ template <typename key_t, auto mHashFunc>
 bool
 AgHashTable<key_t, mHashFunc>::find (const key_t pKey) const
 {
-    // hash of the supplied key to insert
-    uint64_t    keyHash;
-    // bucket in which the key will be inserted
-    uint64_t    bucketId;
-    // position in bucket in which the key will be inserted
-    uint64_t    bucketPos;
+    uint64_t    keyHash;                        // hash of the supplied key to insert
+    uint64_t    bucketId;                       // bucket in which the key will be inserted
+    uint64_t    bucketPos;                      // position in bucket in which the key will be inserted
 
-    // pointer to node, used while iterating over linked list to find matching key
-    node_ptr_t  listElem;
+    node_ptr_t  listElem ;                      // pointer to node in linked list
 
     // calculate the hash of they key and find its bucket and position in the bucket
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
     keyHash         = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    bucketId        = keyHash >> sBucketSizeLog;
-    bucketPos       = keyHash & ((1ULL << sBucketSizeLog) - 1);
+    bucketId        = keyHash / sBucketCapacity;
+    bucketPos       = keyHash % sBucketCapacity;
 
     // the bucket itself does not exist, search unsuccesful
     if (mBuckets[bucketId].mAr == nullptr) {
@@ -301,25 +280,20 @@ template <typename key_t, auto mHashFunc>
 bool
 AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
 {
-    // hash of the supplied key to erase
-    uint64_t    keyHash;
-    // bucket in which the key should be present
-    uint64_t    bucketId;
-    // position in bucket at which they key should be present
-    uint64_t    bucketPos;
+    uint64_t    keyHash;                        // hash of the supplied key to insert
+    uint64_t    bucketId;                       // bucket in which the key will be inserted
+    uint64_t    bucketPos;                      // position in bucket in which the key will be inserted
 
-    // pointer to node ptr, used while iterating over the linked list in the slot
-    node_ptr_t  *listElem;
+    node_ptr_t  *listElem;                      // pointer to node ptr, for iterating over the linked list in the slot
 
-    // pointer to allocated new node, used while deleting the key's node
-    node_ptr_t  node;
+    node_ptr_t  node;                           // pointer to allocated new node
 
     // calculate the hash of they key and find its bucket and position in the bucket
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
-    keyHash         = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    bucketId        = keyHash >> sBucketSizeLog;
-    bucketPos       = keyHash & ((1ULL << sBucketSizeLog) - 1);
+    keyHash                     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+    bucketId                    = keyHash / sBucketCapacity;
+    bucketPos                   = keyHash % sBucketCapacity;
 
     // if the bucket itself does not exist, return failed erase
     if (mBuckets[bucketId].mAr == nullptr) {
@@ -378,7 +352,7 @@ AgHashTable<key_t, mHashFunc>::size () const
  */
 template <typename key_t, auto mHashFunc>
 uint64_t
-AgHashTable<key_t, mHashFunc>::maxBuckets () const
+AgHashTable<key_t, mHashFunc>::bucket_count () const
 {
     return sBucketCount;
 }
@@ -390,32 +364,32 @@ AgHashTable<key_t, mHashFunc>::maxBuckets () const
  */
 template <typename key_t, auto mHashFunc>
 uint64_t
-AgHashTable<key_t, mHashFunc>::bucketsUsed () const
+AgHashTable<key_t, mHashFunc>::buckets_used () const
 {
     return mBucketsUsed;
 }
 
 /**
- * @brief                           Returns the maximum number of elements a bucket can have
+ * @brief                           Returns the capacity of a bucket (maximum number of elements a bucket can have)
  *
  * @return uint64_t                 Number of elements which a bucket can have
  */
 template <typename key_t, auto mHashFunc>
 uint64_t
-AgHashTable<key_t, mHashFunc>::maxBucketSize () const
+AgHashTable<key_t, mHashFunc>::bucket_capacity () const
 {
-    return sBucketSize;
+    return sBucketCapacity;
 }
 
 /**
- * @brief                           Returns the number of elements in a given bucket
+ * @brief                           Returns the current number of elements in a given bucket
  *
  * @param pIndex                    Index of the bucket whose size is to be returned
  * @return uint64_t                 Number of elements in bucket at position pIndex
  */
 template <typename key_t, auto mHashFunc>
 uint64_t
-AgHashTable<key_t, mHashFunc>::bucketSize (const uint64_t pIndex) const
+AgHashTable<key_t, mHashFunc>::bucket_size (const uint64_t pIndex) const
 {
     return mBuckets[pIndex].mSize;
 }
