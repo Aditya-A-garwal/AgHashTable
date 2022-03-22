@@ -46,8 +46,8 @@ protected:
      */
     struct node_t {
 
-        node_t      *mPtr       {nullptr};      /* pointer to next node in the linked list */
-        key_t       mKey;                       /* the key value */
+        node_t      *mPtr       {nullptr};      /* Pointer to next node in the linked list */
+        key_t       mKey;                       /* The key value */
 
         ~node_t () { delete mPtr; }
     };
@@ -58,8 +58,8 @@ protected:
      */
     struct bucket_t {
 
-        uint64_t    mSize       {0};            /* number of elements currently in the bucket */
-        node_t      **mAr       {nullptr};      /* pointer to the array storing the slots in the bucket */
+        uint64_t    mSize       {0};            /* Number of elements currently in the bucket */
+        node_t      **mAr       {nullptr};      /* Pointer to the array storing the slots in the bucket */
     };
 
     using       node_ptr_t  = node_t *;
@@ -76,10 +76,13 @@ protected:
 
     static_assert ((sBucketCapacity * sBucketCount) == sDistinctHash);
 
-    bucket_t        *mBuckets;                  /* member array to buckets */
-    uint64_t        mSize           {0ULL};     /* number of elements in the table */
-    uint64_t        mBucketsUsed    {0ULL};     /* number of buckets which have atleast one element */
+    bucket_t        *mBuckets;                                                              /* Member array to buckets */
+    uint64_t        mSize           {0ULL};                                                 /* Number of elements in the table */
+    uint64_t        mBucketsUsed    {0ULL};                                                 /* Number of buckets which have atleast one element */
 
+    DBG_MODE (
+    uint64_t        mSlotsUsed      {0ULL};                                                 /* Number of slots used in the table to accomodate keys*/
+    )
 
 public:
 
@@ -112,6 +115,10 @@ public:
     uint64_t            buckets_used            () const;
     uint64_t            bucket_capacity         () const;
     uint64_t            bucket_size             (const uint64_t pIndex) const;
+
+    DBG_MODE (
+    uint64_t            slots_used              () const;
+    )
 };
 
 /**
@@ -238,6 +245,13 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
     // get a pointer to the pointer to the next node
     // pointer to pointer allows for removing special head case
     listElem                    = &mBuckets[bucketId].mAr[bucketPos];
+
+    DBG_MODE (
+
+    if (mBuckets[bucketId].mAr[bucketPos] == nullptr) {
+        mSlotsUsed              += 1;
+    }
+    )
 
     // while the pointer being pointed to, does not point to null, the end of the list has not been reached
     while ((*listElem) != nullptr) {
@@ -371,6 +385,13 @@ AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
                 mBucketsUsed            += 1;
             }
 
+            DBG_MODE (
+
+            if (mBuckets[bucketId].mAr[bucketPos] == nullptr) {
+                mSlotsUsed              -= 1;
+            }
+            )
+
             return true;
         }
 
@@ -440,6 +461,21 @@ AgHashTable<key_t, mHashFunc>::bucket_size (const uint64_t pIndex) const
 {
     return mBuckets[pIndex].mSize;
 }
+
+DBG_MODE (
+
+/**
+ * @brief                           Returns number of slots used in the hash table to accomodate keys
+ *
+ * @return uint64_t                 Number of slots used to accomodate present keys
+ */
+template <typename key_t, auto mHashFunc>
+uint64_t
+AgHashTable<key_t, mHashFunc>::slots_used () const
+{
+    return mSlotsUsed;
+}
+)
 
 #undef  DBG_MODE
 #undef  NO_DBG_MODE
