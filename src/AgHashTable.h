@@ -90,6 +90,8 @@ public:
 
     //      Modifiers
 
+    bool                initialize_if_not       ();
+
     bool                insert                  (const key_t pKey);
     bool                erase                   (const key_t pKey);
 
@@ -98,6 +100,8 @@ public:
     bool                find                    (const key_t pKey) const;
 
     //      Getters
+
+    bool                initialized             () const;
 
     uint64_t            size                    () const;
     uint64_t            bucket_count            () const;
@@ -118,6 +122,45 @@ AgHashTable<key_t, mHashFunc>::AgHashTable ()
         TEST_MODE (std::cout << "Could not allocate buckets while constructing\n";)
         return;
     }
+}
+
+/**
+ * @brief                           Returns if the table could be succesfully initialized
+ *
+ * @note                            If the function returns false, using the table results in undefined behaviour
+ *
+ * @return true                     If the table was succesfully initialized, and is in a useable state
+ * @return false                    If the table could not be succesfully initialized, and is not in a useable state
+ */
+template <typename key_t, auto mHashFunc>
+bool
+AgHashTable<key_t, mHashFunc>::initialized () const
+{
+    return (mBuckets != nullptr);
+}
+
+/**
+ * @brief                           Tries to initialize the table if it could not be succesfully initialized
+ *
+ * @return true                     If the table was not already initialized and could be succesfully initialized
+ * @return false                    If the table was already initialized or could not be initialized
+ */
+template <typename key_t, auto mHashFunc>
+bool
+AgHashTable<key_t, mHashFunc>::initialize_if_not ()
+{
+    if (mBuckets != nullptr) {
+        TEST_MODE (std::cout << "Table has already been initialized\n";)
+        return false;
+    }
+
+    mBuckets        = new (std::nothrow) bucket_t[sBucketCount];
+    if (mBuckets == nullptr) {
+        TEST_MODE (std::cout << "Could not allocate buckets while trying to re-init\n";)
+        return false;
+    }
+
+    return true;
 }
 
 /**
