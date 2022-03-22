@@ -8,14 +8,18 @@
 
 
 #ifndef AG_HASH_TABLE_GUARD_H
-#define AG_HASH_TABLE_GUARD_H
 
-#ifdef AG_TEST_MODE
-#define TEST_MODE(...)                          __VA_ARGS__
-#define NO_TEST_MODE(...)
+#define     AG_HASH_TABLE_GUARD_H
+
+#ifdef AG_DBG_MODE
+#define     DBG_MODE(...)                           __VA_ARGS__
+#define     NO_DBG_MODE(...)
+
 #else
-#define TEST_MODE(...)
-#define NO_TEST_MODE(...)                       __VA_ARGS__
+
+#define     DBG_MODE(...)
+#define     NO_DBG_MODE(...)                        __VA_ARGS__
+
 #endif
 
 #include <type_traits>
@@ -119,7 +123,7 @@ AgHashTable<key_t, mHashFunc>::AgHashTable ()
     // allocate array of buckets, return if could not allocate
     mBuckets        = new (std::nothrow) bucket_t[sBucketCount];
     if (mBuckets == nullptr) {
-        TEST_MODE (std::cout << "Could not allocate buckets while constructing\n";)
+        DBG_MODE (std::cout << "Could not allocate buckets while constructing\n";)
         return;
     }
 }
@@ -150,13 +154,13 @@ bool
 AgHashTable<key_t, mHashFunc>::initialize_if_not ()
 {
     if (mBuckets != nullptr) {
-        TEST_MODE (std::cout << "Table has already been initialized\n";)
+        DBG_MODE (std::cout << "Table has already been initialized\n";)
         return false;
     }
 
     mBuckets        = new (std::nothrow) bucket_t[sBucketCount];
     if (mBuckets == nullptr) {
-        TEST_MODE (std::cout << "Could not allocate buckets while trying to re-init\n";)
+        DBG_MODE (std::cout << "Could not allocate buckets while trying to re-init\n";)
         return false;
     }
 
@@ -208,7 +212,7 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
 
     node_ptr_t  node;                           // pointer to allocated new node
 
-    // calculate the hash of they key and find its bucket and position in the bucket
+    // calculate the hash of the key and find its bucket and position in the bucket
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
     keyHash                     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
@@ -221,7 +225,7 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
         // allocate the array of the current bucket, return failed insertion if could not allocate
         mBuckets[bucketId].mAr  = new (std::nothrow) node_ptr_t[sBucketCapacity];
         if (mBuckets [bucketId].mAr == nullptr) {
-            TEST_MODE(std::cout << "Could not allocate bucket array while inserting\n";)
+            DBG_MODE(std::cout << "Could not allocate bucket array while inserting\n";)
             return false;
         }
 
@@ -249,7 +253,7 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
     // allocate a new node containing the key, return failed insertion if could not allocate
     node                        = new (std::nothrow) node_t {nullptr, pKey};
     if (node == nullptr) {
-        TEST_MODE (std::cout << "Could not allocate new node while inserting\n";)
+        DBG_MODE (std::cout << "Could not allocate new node while inserting\n";)
         return false;
     }
 
@@ -437,7 +441,7 @@ AgHashTable<key_t, mHashFunc>::bucket_size (const uint64_t pIndex) const
     return mBuckets[pIndex].mSize;
 }
 
-#undef  TEST_MODE
-#undef  NO_TEST_MODE
+#undef  DBG_MODE
+#undef  NO_DBG_MODE
 
 #endif      // Header Guard

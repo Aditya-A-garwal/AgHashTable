@@ -2,7 +2,7 @@
 #include <type_traits>
 #include <limits>
 
-#define AG_TEST_MODE
+#define AG_DBG_MODE
 #include "AgHashTable.h"
 
 TEST (Smoke, SmokeTest)
