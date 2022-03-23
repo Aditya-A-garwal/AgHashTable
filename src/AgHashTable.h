@@ -82,26 +82,31 @@ class AgHashTable {
         node_t      **mSlots    {nullptr};      /* Pointer to the array storing the slots in the bucket */
     };
 
-    using       node_ptr_t  = node_t *;
+    using       node_ptr_t  = node_t *;         /* Helper type to encapsulate pointers to nodes */
+
+    // make sure that the equals comparator is callable
+    static_assert (std::is_invocable <decltype (mEquals), const key_t, const key_t>::value, "Given Equals comparator must be callable");
 
     // make sure that the hash function is callable and returns an unsigned integral type of not more than 16 bits
     static_assert (std::is_invocable <decltype (mHashFunc), const uint8_t *, const uint64_t>::value, "hash function should be callable");
     using       hash_t      = typename std::invoke_result<decltype (mHashFunc), const uint8_t *, const uint64_t>::type;
     static_assert (std::is_unsigned<hash_t>::value, "hash function should return unsigned type");
-    static_assert (sizeof (hash_t) <= 2, "hash function should be 16 bit or less");
 
-    static constexpr uint64_t   sDistinctHash       = 1ULL << (sizeof (hash_t) * 8ULL);     /* Number of distinct hash values possible */
-    static constexpr uint64_t   sBucketCapacity     = 1ULL << 8ULL;                         /* Number of slots in a bucket */
-    static constexpr uint64_t   sBucketCount        = 1ULL << 8ULL;                         /* Number of distinct buckets */
+    static constexpr uint64_t   sBucketCountInit    = 4096;                                     /* Initial number of buckets to start with */
+    static constexpr uint64_t   sDistinctHash       = 1ULL << (sizeof (hash_t) * 8ULL);         /* Number of distinct hashs possible for the given hash function */
+    //! The value of sDistinctHash should be recievable from the user as well
 
-    static_assert ((sBucketCapacity * sBucketCount) == sDistinctHash);
 
-    bucket_t        *mBuckets;                                                              /* Member array to buckets */
-    uint64_t        mSize           {0ULL};                                                 /* Number of elements in the table */
-    uint64_t        mBucketsUsed    {0ULL};                                                 /* Number of buckets which have atleast one element */
+    uint64_t        mBucketCount        {sBucketCountInit};                                     /* Number of buckets present in the table totally (includes allcoated and not unallocated) */
+    uint64_t        mBucketSlotCount    {(sDistinctHash / sBucketCountInit)
+                                        + (uint64_t)((sDistinctHash % sBucketCountInit) != 0)}; /* Number of slots in each bucket */
+
+    bucket_t        *mBuckets;                                                                  /* Member array to buckets */
+    uint64_t        mSize               {0ULL};                                                 /* Number of elements in the table */
+    uint64_t        mBucketsUsed        {0ULL};                                                 /* Number of buckets which have atleast one element, and are therefore, allocated */
 
     DBG_MODE (
-    uint64_t        mSlotsUsed      {0ULL};                                                 /* Number of slots used in the table to accomodate keys*/
+    uint64_t        mSlotsUsed          {0ULL};                                                 /* Number of slots used in the table to accomodate keys*/
     )
 
 
@@ -133,13 +138,16 @@ class AgHashTable {
     bool                initialized             () const;
 
     uint64_t            size                    () const;
+    uint64_t            key_count               () const;
+
     uint64_t            bucket_count            () const;
     uint64_t            buckets_used            () const;
-    uint64_t            bucket_capacity         () const;
-    uint64_t            bucket_size             (const uint64_t pIndex) const;
+
+    uint64_t            bucket_slot_count       () const;
+    uint64_t            bucket_key_count        (const uint64_t pIndex) const;
 
     DBG_MODE (
-    uint64_t            slots_used              () const;
+    uint64_t            total_slots_used              () const;
     )
 };
 
@@ -149,8 +157,13 @@ class AgHashTable {
 template <typename key_t, auto mHashFunc, auto mEquals>
 AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable ()
 {
+    if ((mBucketCount * mBucketSlotCount) < sDistinctHash) {
+        DBG_MODE (std::cout << "Dimensioning of table is incorrect\n";)
+        return;
+    }
+
     // allocate array of buckets, return if could not allocate
-    mBuckets        = new (std::nothrow) bucket_t[sBucketCount];
+    mBuckets        = new (std::nothrow) bucket_t[mBucketCount   ];
     if (mBuckets == nullptr) {
         DBG_MODE (std::cout << "Could not allocate buckets while constructing\n";)
         return;
@@ -187,7 +200,7 @@ AgHashTable<key_t, mHashFunc, mEquals>::initialize_if_not ()
         return false;
     }
 
-    mBuckets        = new (std::nothrow) bucket_t[sBucketCount];
+    mBuckets        = new (std::nothrow) bucket_t[mBucketCount];
     if (mBuckets == nullptr) {
         DBG_MODE (std::cout << "Could not allocate buckets while trying to re-init\n";)
         return false;
@@ -202,7 +215,7 @@ AgHashTable<key_t, mHashFunc, mEquals>::initialize_if_not ()
 template <typename key_t, auto mHashFunc, auto mEquals>
 AgHashTable<key_t, mHashFunc, mEquals>::~AgHashTable ()
 {
-    for (uint64_t bucket = 0; bucket < sBucketCount; ++bucket) {
+    for (uint64_t bucket = 0; bucket < mBucketCount; ++bucket) {
 
         // if the current bucket has never been allocated, skip it
         if (mBuckets[bucket].mSlots == nullptr) {
@@ -211,7 +224,7 @@ AgHashTable<key_t, mHashFunc, mEquals>::~AgHashTable ()
 
         // go through every slot and delete the entire linked list at that slot
         // deleting a single element at that position should be able to delete the entire list
-        for (uint64_t slot = 0; slot < sBucketCapacity; ++slot) {
+        for (uint64_t slot = 0; slot < mBucketSlotCount; ++slot) {
             delete mBuckets[bucket].mSlots[slot];
         }
 
@@ -246,21 +259,21 @@ AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
     keyHash                     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    bucketId                    = keyHash / sBucketCapacity;
-    bucketPos                   = keyHash % sBucketCapacity;
+    bucketId                    = keyHash / mBucketSlotCount;
+    bucketPos                   = keyHash % mBucketSlotCount;
 
     // if the bucket has not been allocated yet, then it needs to be
     if (mBuckets[bucketId].mSlots == nullptr) {
 
         // allocate the array of the current bucket, return failed insertion if could not allocate
-        mBuckets[bucketId].mSlots   = new (std::nothrow) node_ptr_t[sBucketCapacity];
+        mBuckets[bucketId].mSlots   = new (std::nothrow) node_ptr_t[mBucketSlotCount];
         if (mBuckets [bucketId].mSlots == nullptr) {
             DBG_MODE(std::cout << "Could not allocate bucket array while inserting\n";)
             return false;
         }
 
         // go over each slot in the bucket and make the linked list point to nullptr
-        for (uint64_t i = 0; i < sBucketCapacity; ++i) {
+        for (uint64_t i = 0; i < mBucketSlotCount; ++i) {
             mBuckets[bucketId].mSlots[i]    = nullptr;
         }
     }
@@ -330,8 +343,8 @@ AgHashTable<key_t, mHashFunc, mEquals>::find (const key_t pKey) const
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
     keyHash         = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    bucketId        = keyHash / sBucketCapacity;
-    bucketPos       = keyHash % sBucketCapacity;
+    bucketId        = keyHash / mBucketSlotCount;
+    bucketPos       = keyHash % mBucketSlotCount;
 
     // the bucket itself does not exist, search unsuccesful
     if (mBuckets[bucketId].mSlots == nullptr) {
@@ -376,8 +389,8 @@ AgHashTable<key_t, mHashFunc, mEquals>::erase (const key_t pKey)
     // the bucket is the sBucketSizeLog Most Significant bits, while the
     // position in the bucket is the remaining Least Significant bits of the hash
     keyHash                     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    bucketId                    = keyHash / sBucketCapacity;
-    bucketPos                   = keyHash % sBucketCapacity;
+    bucketId                    = keyHash / mBucketSlotCount;
+    bucketPos                   = keyHash % mBucketSlotCount;
 
     // if the bucket itself does not exist, return failed erase
     if (mBuckets[bucketId].mSlots == nullptr) {
@@ -425,7 +438,7 @@ AgHashTable<key_t, mHashFunc, mEquals>::erase (const key_t pKey)
 }
 
 /**
- * @brief                           Returns the number of elements in the hashtable
+ * @brief                           Returns the number of elements in the hashtable (identical to method key_count ())
  *
  * @return uint64_t                 Number of elements in the table
  */
@@ -437,7 +450,19 @@ AgHashTable<key_t, mHashFunc, mEquals>::size () const
 }
 
 /**
- * @brief                           Returns the maximum number of buckets which the table can have
+ * @brief                           Returns the number of elements in the hashtable (identical to method size ())
+ *
+ * @return uint64_t                 Number of elements in the table
+ */
+template <typename key_t, auto mHashFunc, auto mEquals>
+uint64_t
+AgHashTable<key_t, mHashFunc, mEquals>::key_count () const
+{
+    return mSize;
+}
+
+/**
+ * @brief                           Returns the total number of buckets in the table (allocated and unallocated)
  *
  * @return uint64_t                 Number of buckets which the hash table can have
  */
@@ -445,11 +470,11 @@ template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
 AgHashTable<key_t, mHashFunc, mEquals>::bucket_count () const
 {
-    return sBucketCount;
+    return mBucketCount;
 }
 
 /**
- * @brief                           Returns the number of buckets currently being used
+ * @brief                           Returns the number of buckets currently being used (having atleast one key)
  *
  * @return uint64_t                 Number of buckets currently being used
  */
@@ -461,26 +486,26 @@ AgHashTable<key_t, mHashFunc, mEquals>::buckets_used () const
 }
 
 /**
- * @brief                           Returns the capacity of a bucket (maximum number of elements a bucket can have)
+ * @brief                           Returns the total number of slots in a bucket
  *
- * @return uint64_t                 Number of elements which a bucket can have
+ * @return uint64_t                 Number of slots in a bucket
  */
 template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::bucket_capacity () const
+AgHashTable<key_t, mHashFunc, mEquals>::bucket_slot_count () const
 {
-    return sBucketCapacity;
+    return mBucketSlotCount;
 }
 
 /**
- * @brief                           Returns the current number of elements in a given bucket
+ * @brief                           Returns the number of keys present in a given bucket
  *
- * @param pIndex                    Index of the bucket whose size is to be returned
- * @return uint64_t                 Number of elements in bucket at position pIndex
+ * @param pIndex                    Index of the bucket to be checked
+ * @return uint64_t                 Number of keys in the bucket at position pIndex
  */
 template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::bucket_size (const uint64_t pIndex) const
+AgHashTable<key_t, mHashFunc, mEquals>::bucket_key_count (const uint64_t pIndex) const
 {
     return mBuckets[pIndex].mSize;
 }
@@ -494,7 +519,7 @@ DBG_MODE (
  */
 template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::slots_used () const
+AgHashTable<key_t, mHashFunc, mEquals>::total_slots_used () const
 {
     return mSlotsUsed;
 }
