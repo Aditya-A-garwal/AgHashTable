@@ -38,7 +38,8 @@ template <typename key_t, auto mHashFunc = ag_pearson_16_hash>
 class AgHashTable {
 
 
-protected:
+    protected:
+
 
     /**
      * @brief               Node in the linked list at a slot
@@ -59,7 +60,7 @@ protected:
     struct bucket_t {
 
         uint64_t    mSize       {0};            /* Number of elements currently in the bucket */
-        node_t      **mAr       {nullptr};      /* Pointer to the array storing the slots in the bucket */
+        node_t      **mSlots    {nullptr};      /* Pointer to the array storing the slots in the bucket */
     };
 
     using       node_ptr_t  = node_t *;
@@ -84,7 +85,9 @@ protected:
     uint64_t        mSlotsUsed      {0ULL};                                                 /* Number of slots used in the table to accomodate keys*/
     )
 
-public:
+
+    public:
+
 
     //      Constructors
 
@@ -183,17 +186,17 @@ AgHashTable<key_t, mHashFunc>::~AgHashTable ()
     for (uint64_t bucket = 0; bucket < sBucketCount; ++bucket) {
 
         // if the current bucket has never been allocated, skip it
-        if (mBuckets[bucket].mAr == nullptr) {
+        if (mBuckets[bucket].mSlots == nullptr) {
             continue;
         }
 
         // go through every slot and delete the entire linked list at that slot
         for (uint64_t slot = 0; slot < sBucketCapacity; ++slot) {
-            delete mBuckets[bucket].mAr[slot];
+            delete mBuckets[bucket].mSlots[slot];
         }
 
         // delete this bucket
-        delete[] mBuckets[bucket].mAr;
+        delete[] mBuckets[bucket].mSlots;
     }
 
     delete[] mBuckets;
@@ -227,28 +230,28 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
     bucketPos                   = keyHash % sBucketCapacity;
 
     // if the bucket has not been allocated yet, then it needs to be
-    if (mBuckets[bucketId].mAr == nullptr) {
+    if (mBuckets[bucketId].mSlots == nullptr) {
 
         // allocate the array of the current bucket, return failed insertion if could not allocate
-        mBuckets[bucketId].mAr  = new (std::nothrow) node_ptr_t[sBucketCapacity];
-        if (mBuckets [bucketId].mAr == nullptr) {
+        mBuckets[bucketId].mSlots   = new (std::nothrow) node_ptr_t[sBucketCapacity];
+        if (mBuckets [bucketId].mSlots == nullptr) {
             DBG_MODE(std::cout << "Could not allocate bucket array while inserting\n";)
             return false;
         }
 
         // go over each slot in the bucket and make the linked list point to nullptr
         for (uint64_t i = 0; i < sBucketCapacity; ++i) {
-            mBuckets[bucketId].mAr[i]   = nullptr;
+            mBuckets[bucketId].mSlots[i]    = nullptr;
         }
     }
 
     // get a pointer to the pointer to the next node
     // pointer to pointer allows for removing special head case
-    listElem                    = &mBuckets[bucketId].mAr[bucketPos];
+    listElem                    = &mBuckets[bucketId].mSlots[bucketPos];
 
     DBG_MODE (
 
-    if (mBuckets[bucketId].mAr[bucketPos] == nullptr) {
+    if (mBuckets[bucketId].mSlots[bucketPos] == nullptr) {
         mSlotsUsed              += 1;
     }
     )
@@ -311,12 +314,12 @@ AgHashTable<key_t, mHashFunc>::find (const key_t pKey) const
     bucketPos       = keyHash % sBucketCapacity;
 
     // the bucket itself does not exist, search unsuccesful
-    if (mBuckets[bucketId].mAr == nullptr) {
+    if (mBuckets[bucketId].mSlots == nullptr) {
         return false;
     }
 
     // get head of linked list at that position and iterate over it while trying to find the value
-    listElem        = mBuckets[bucketId].mAr[bucketPos];
+    listElem        = mBuckets[bucketId].mSlots[bucketPos];
     while (listElem != nullptr) {
 
         // if matching key was found, return succesful search
@@ -357,13 +360,13 @@ AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
     bucketPos                   = keyHash % sBucketCapacity;
 
     // if the bucket itself does not exist, return failed erase
-    if (mBuckets[bucketId].mAr == nullptr) {
+    if (mBuckets[bucketId].mSlots == nullptr) {
         return false;
     }
 
     // get a pointer to the pointer to the next node
     // pointer to pointer allows for removing special head case
-    listElem                    = &mBuckets[bucketId].mAr[bucketPos];
+    listElem                    = &mBuckets[bucketId].mSlots[bucketPos];
 
     // while the pointer being pointed to, does not point to null, the end of the list has not been reached
     while ((*listElem) != nullptr) {
@@ -387,7 +390,7 @@ AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
 
             DBG_MODE (
 
-            if (mBuckets[bucketId].mAr[bucketPos] == nullptr) {
+            if (mBuckets[bucketId].mSlots[bucketPos] == nullptr) {
                 mSlotsUsed              -= 1;
             }
             )
