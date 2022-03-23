@@ -27,6 +27,25 @@
 
 #include "AgHashFunctions.hpp"
 
+/**
+ * @brief                   Default equals comparator to be used by AgHashTable for checking equivalance of keys
+ *
+ * Requires operator== to be overloaded for val_t
+ *
+ * @tparam val_t            Type of value to compare
+ *
+ * @param pA                First operand
+ * @param pB                Second operand
+ *
+ * @return true             If both the operands are equal
+ * @return false            If both the operands are not equal
+ */
+template <typename val_t>
+static bool
+ag_hashtable_default_equals (const val_t &pA, const val_t &pB)
+{
+    return (pA == pB);
+}
 
 /**
  * @brief                   AgHashtable is an implementation of the hashtable data structure
@@ -34,7 +53,7 @@
  * @tparam key_t            Type of keys held by the hashtable
  * @tparam mHashFunc        Hash Function for calculating the hashes of keys
  */
-template <typename key_t, auto mHashFunc = ag_pearson_16_hash>
+template <typename key_t, auto mHashFunc = ag_pearson_16_hash, auto mEquals = ag_hashtable_default_equals<key_t>>
 class AgHashTable {
 
 
@@ -92,7 +111,7 @@ class AgHashTable {
     //      Constructors
 
     AgHashTable                                 ();
-    AgHashTable                                 (const AgHashTable<key_t, mHashFunc> &pOther)   = delete;
+    AgHashTable                                 (const AgHashTable<key_t, mHashFunc, mEquals> &pOther)   = delete;
 
     //      Destructor
 
@@ -125,10 +144,10 @@ class AgHashTable {
 };
 
 /**
- * @brief                           Construct a new AgHashTable<key_t, mHashFunc>::AgHashTable object
+ * @brief                           Construct a new AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable object
  */
-template <typename key_t, auto mHashFunc>
-AgHashTable<key_t, mHashFunc>::AgHashTable ()
+template <typename key_t, auto mHashFunc, auto mEquals>
+AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable ()
 {
     // allocate array of buckets, return if could not allocate
     mBuckets        = new (std::nothrow) bucket_t[sBucketCount];
@@ -146,9 +165,9 @@ AgHashTable<key_t, mHashFunc>::AgHashTable ()
  * @return true                     If the table was succesfully initialized, and is in a useable state
  * @return false                    If the table could not be succesfully initialized, and is not in a useable state
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 bool
-AgHashTable<key_t, mHashFunc>::initialized () const
+AgHashTable<key_t, mHashFunc, mEquals>::initialized () const
 {
     return (mBuckets != nullptr);
 }
@@ -159,9 +178,9 @@ AgHashTable<key_t, mHashFunc>::initialized () const
  * @return true                     If the table was not already initialized and could be succesfully initialized
  * @return false                    If the table was already initialized or could not be initialized
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 bool
-AgHashTable<key_t, mHashFunc>::initialize_if_not ()
+AgHashTable<key_t, mHashFunc, mEquals>::initialize_if_not ()
 {
     if (mBuckets != nullptr) {
         DBG_MODE (std::cout << "Table has already been initialized\n";)
@@ -178,10 +197,10 @@ AgHashTable<key_t, mHashFunc>::initialize_if_not ()
 }
 
 /**
- * @brief                           Destroy the AgHashTable<key_t, mHashFunc>::AgHashTable object
+ * @brief                           Destroy the AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable object
  */
-template <typename key_t, auto mHashFunc>
-AgHashTable<key_t, mHashFunc>::~AgHashTable ()
+template <typename key_t, auto mHashFunc, auto mEquals>
+AgHashTable<key_t, mHashFunc, mEquals>::~AgHashTable ()
 {
     for (uint64_t bucket = 0; bucket < sBucketCount; ++bucket) {
 
@@ -191,6 +210,7 @@ AgHashTable<key_t, mHashFunc>::~AgHashTable ()
         }
 
         // go through every slot and delete the entire linked list at that slot
+        // deleting a single element at that position should be able to delete the entire list
         for (uint64_t slot = 0; slot < sBucketCapacity; ++slot) {
             delete mBuckets[bucket].mSlots[slot];
         }
@@ -210,9 +230,9 @@ AgHashTable<key_t, mHashFunc>::~AgHashTable ()
  * @return true                     If no duplicate key was found and was inserted succesfully
  * @return false                    If key could not be inserted succesfully
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 bool
-AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
+AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
 {
     uint64_t    keyHash;                        // hash of the supplied key to insert
     uint64_t    bucketId;                       // bucket in which the key will be inserted
@@ -260,7 +280,7 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
     while ((*listElem) != nullptr) {
 
         // in case a matching element was found, return failed insertion (duplicates are not allowed)
-        if ((*listElem)->mKey == pKey) {
+        if (mEquals ((*listElem)->mKey, pKey)) {
             return false;
         }
 
@@ -296,9 +316,9 @@ AgHashTable<key_t, mHashFunc>::insert (const key_t pKey)
  * @return true                     If key exists in the hashtable
  * @return false                    If key does not exist in the hashtable
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 bool
-AgHashTable<key_t, mHashFunc>::find (const key_t pKey) const
+AgHashTable<key_t, mHashFunc, mEquals>::find (const key_t pKey) const
 {
     uint64_t    keyHash;                        // hash of the supplied key to insert
     uint64_t    bucketId;                       // bucket in which the key will be inserted
@@ -323,7 +343,7 @@ AgHashTable<key_t, mHashFunc>::find (const key_t pKey) const
     while (listElem != nullptr) {
 
         // if matching key was found, return succesful search
-        if (listElem->mKey == pKey) {
+        if (mEquals (listElem->mKey, pKey)) {
             return true;
         }
         listElem    = listElem->mPtr;
@@ -340,9 +360,9 @@ AgHashTable<key_t, mHashFunc>::find (const key_t pKey) const
  * @return true                     If the key was succesfully found and removed
  * @return false                    If a matching key could not be found or removed
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 bool
-AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
+AgHashTable<key_t, mHashFunc, mEquals>::erase (const key_t pKey)
 {
     uint64_t    keyHash;                        // hash of the supplied key to insert
     uint64_t    bucketId;                       // bucket in which the key will be inserted
@@ -372,7 +392,7 @@ AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
     while ((*listElem) != nullptr) {
 
         // if matching key was found
-        if ((*listElem)->mKey == pKey) {
+        if (mEquals ((*listElem)->mKey, pKey)) {
 
             // take out the current node and make the previous node point to the next node, delete the node
             node                        = *listElem;
@@ -409,9 +429,9 @@ AgHashTable<key_t, mHashFunc>::erase (const key_t pKey)
  *
  * @return uint64_t                 Number of elements in the table
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc>::size () const
+AgHashTable<key_t, mHashFunc, mEquals>::size () const
 {
     return mSize;
 }
@@ -421,9 +441,9 @@ AgHashTable<key_t, mHashFunc>::size () const
  *
  * @return uint64_t                 Number of buckets which the hash table can have
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc>::bucket_count () const
+AgHashTable<key_t, mHashFunc, mEquals>::bucket_count () const
 {
     return sBucketCount;
 }
@@ -433,9 +453,9 @@ AgHashTable<key_t, mHashFunc>::bucket_count () const
  *
  * @return uint64_t                 Number of buckets currently being used
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc>::buckets_used () const
+AgHashTable<key_t, mHashFunc, mEquals>::buckets_used () const
 {
     return mBucketsUsed;
 }
@@ -445,9 +465,9 @@ AgHashTable<key_t, mHashFunc>::buckets_used () const
  *
  * @return uint64_t                 Number of elements which a bucket can have
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc>::bucket_capacity () const
+AgHashTable<key_t, mHashFunc, mEquals>::bucket_capacity () const
 {
     return sBucketCapacity;
 }
@@ -458,9 +478,9 @@ AgHashTable<key_t, mHashFunc>::bucket_capacity () const
  * @param pIndex                    Index of the bucket whose size is to be returned
  * @return uint64_t                 Number of elements in bucket at position pIndex
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc>::bucket_size (const uint64_t pIndex) const
+AgHashTable<key_t, mHashFunc, mEquals>::bucket_size (const uint64_t pIndex) const
 {
     return mBuckets[pIndex].mSize;
 }
@@ -472,9 +492,9 @@ DBG_MODE (
  *
  * @return uint64_t                 Number of slots used to accomodate present keys
  */
-template <typename key_t, auto mHashFunc>
+template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc>::slots_used () const
+AgHashTable<key_t, mHashFunc, mEquals>::slots_used () const
 {
     return mSlotsUsed;
 }
