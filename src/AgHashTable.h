@@ -92,14 +92,20 @@ class AgHashTable {
     using       hash_t      = typename std::invoke_result<decltype (mHashFunc), const uint8_t *, const uint64_t>::type;
     static_assert (std::is_unsigned<hash_t>::value, "hash function should return unsigned type");
 
+    //! The bitness of the hash function, and consequently the value of sMaxHashValue should be recievable from the user as well
+
+    static constexpr uint64_t   sHashBitness        = 8 * sizeof (hash_t);                      /* Bitness of the hash value */
+
     static constexpr uint64_t   sBucketCountInit    = 4096;                                     /* Initial number of buckets to start with */
-    static constexpr uint64_t   sDistinctHash       = 1ULL << (sizeof (hash_t) * 8ULL);         /* Number of distinct hashs possible for the given hash function */
-    //! The value of sDistinctHash should be recievable from the user as well
+    static constexpr uint64_t   sMaxHashValue       = (sHashBitness == 64) ?                    /* Maximum hash value possible for function of given bitness */
+                                                        (0xffffffffffffffffULL) :
+                                                        ((1ULL << sHashBitness) - 1);
 
 
     uint64_t        mBucketCount        {sBucketCountInit};                                     /* Number of buckets present in the table totally (includes allcoated and not unallocated) */
-    uint64_t        mBucketSlotCount    {(sDistinctHash / sBucketCountInit)
-                                        + (uint64_t)((sDistinctHash % sBucketCountInit) != 0)}; /* Number of slots in each bucket */
+    uint64_t        mBucketSlotCount    {1ULL << (sHashBitness - 12)};                          /* Number of slots in each bucket */
+
+    // Note - 12 = log2(4096), which is the initial bucket count
 
     bucket_t        *mBuckets;                                                                  /* Member array to buckets */
     uint64_t        mSize               {0ULL};                                                 /* Number of elements in the table */
@@ -108,6 +114,7 @@ class AgHashTable {
     DBG_MODE (
     uint64_t        mSlotsUsed          {0ULL};                                                 /* Number of slots used in the table to accomodate keys*/
     )
+
 
 
     public:
@@ -147,8 +154,16 @@ class AgHashTable {
     uint64_t            bucket_key_count        (const uint64_t pIndex) const;
 
     DBG_MODE (
-    uint64_t            total_slots_used              () const;
+    uint64_t            total_slots_used        () const;
     )
+
+
+
+    private:
+
+
+
+    bool                p_check_dimensions      () const;
 };
 
 /**
@@ -157,13 +172,16 @@ class AgHashTable {
 template <typename key_t, auto mHashFunc, auto mEquals>
 AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable ()
 {
-    if ((mBucketCount * mBucketSlotCount) < sDistinctHash) {
+    if (!p_check_dimensions ()) {
         DBG_MODE (std::cout << "Dimensioning of table is incorrect\n";)
+        DBG_MODE (std::cout << "Bucket Count:\t\t" << mBucketCount << '\n';)
+        DBG_MODE (std::cout << "Bucket Slot Count:\t" << mBucketSlotCount << '\n';)
+        DBG_MODE (std::cout << "Max Hash Value:\t\t" << sMaxHashValue << '\n';)
         return;
     }
 
     // allocate array of buckets, return if could not allocate
-    mBuckets        = new (std::nothrow) bucket_t[mBucketCount   ];
+    mBuckets        = new (std::nothrow) bucket_t[mBucketCount];
     if (mBuckets == nullptr) {
         DBG_MODE (std::cout << "Could not allocate buckets while constructing\n";)
         return;
@@ -524,6 +542,18 @@ AgHashTable<key_t, mHashFunc, mEquals>::total_slots_used () const
     return mSlotsUsed;
 }
 )
+
+template <typename key_t, auto mHashFunc, auto mEquals>
+bool
+AgHashTable<key_t, mHashFunc, mEquals>::p_check_dimensions () const
+{
+    uint64_t    n;
+
+    n   = (mBucketCount - 1) * mBucketSlotCount;
+    n   += -1 + mBucketSlotCount;
+
+    return (n >= sMaxHashValue);
+}
 
 #undef  DBG_MODE
 #undef  NO_DBG_MODE
