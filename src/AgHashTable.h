@@ -22,6 +22,12 @@
 
 #endif
 
+#ifdef AG_HASH_TABLE_MULTITHREADED_MODE
+#define     MULTITHREADED_MODE(...)                 __VA_ARGS__
+#else
+#define     MULTITHREADED_MODE(...)
+#endif
+
 #include <type_traits>
 #include <limits>
 
@@ -82,6 +88,7 @@ class AgHashTable {
         node_t      **mSlots    {nullptr};      /* Pointer to the array storing the slots in the bucket */
     };
 
+
     using       node_ptr_t  = node_t *;         /* Helper type to encapsulate pointers to nodes */
 
     // make sure that the equals comparator is callable
@@ -115,6 +122,9 @@ class AgHashTable {
     uint64_t        mSlotsUsed          {0ULL};                                                 /* Number of slots used in the table to accomodate keys*/
     )
 
+    MULTITHREADED_MODE (
+    std::mutex      *mMutexAr;
+    )
 
 
     public:
@@ -186,6 +196,17 @@ AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable ()
         DBG_MODE (std::cout << "Could not allocate buckets while constructing\n";)
         return;
     }
+
+    MULTITHREADED_MODE (
+
+    // allocate array of mutex's, return if could not allocate
+    mMutexAr        = new (std::nothrow) std::mutex[mBucketCount];
+    if (mMutexAr == nullptr) {
+        DBG_MODE (std::cout << "Could not allocate array of mutexs while constructing\n";)
+        return;
+    }
+
+    )
 }
 
 /**
@@ -200,6 +221,9 @@ template <typename key_t, auto mHashFunc, auto mEquals>
 bool
 AgHashTable<key_t, mHashFunc, mEquals>::initialized () const
 {
+    MULTITHREADED_MODE (
+    return (mBuckets != nullptr) && (mMutexAr != nullptr);
+    )
     return (mBuckets != nullptr);
 }
 
@@ -251,6 +275,8 @@ AgHashTable<key_t, mHashFunc, mEquals>::~AgHashTable ()
     }
 
     delete[] mBuckets;
+
+    MULTITHREADED_MODE (delete[] mMutexAr;)
 }
 
 /**
@@ -280,6 +306,11 @@ AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
     bucketId                    = keyHash / mBucketSlotCount;
     bucketPos                   = keyHash % mBucketSlotCount;
 
+    MULTITHREADED_MODE (
+    // mMutexAr[bucketId].lock ();
+    std::scoped_lock<std::mutex> scopedLock (mMutexAr[bucketId]);
+    )
+
     // if the bucket has not been allocated yet, then it needs to be
     if (mBuckets[bucketId].mSlots == nullptr) {
 
@@ -287,6 +318,11 @@ AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
         mBuckets[bucketId].mSlots   = new (std::nothrow) node_ptr_t[mBucketSlotCount];
         if (mBuckets [bucketId].mSlots == nullptr) {
             DBG_MODE(std::cout << "Could not allocate bucket array while inserting\n";)
+
+            // MULTITHREADED_MDOE (
+            // mMutexAr[bucketId].unlock ();
+            // )
+
             return false;
         }
 
@@ -312,6 +348,9 @@ AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
 
         // in case a matching element was found, return failed insertion (duplicates are not allowed)
         if (mEquals ((*listElem)->mKey, pKey)) {
+            // MULTITHREADED_MDOE (
+            // mMutexAr[bucketId].unlock ();
+            // )
             return false;
         }
 
@@ -322,6 +361,11 @@ AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
     node                        = new (std::nothrow) node_t {nullptr, pKey};
     if (node == nullptr) {
         DBG_MODE (std::cout << "Could not allocate new node while inserting\n";)
+
+        // MULTITHREADED_MDOE (
+        // mMutexAr[bucketId].unlock ();
+        // )
+
         return false;
     }
 
@@ -335,6 +379,10 @@ AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
 
     mBuckets[bucketId].mSize    += 1;
     mSize                       += 1;
+
+    // MULTITHREADED_MDOE (
+    // mMutexAr[bucketId].unlock ();
+    // )
 
     return true;
 }
@@ -369,16 +417,29 @@ AgHashTable<key_t, mHashFunc, mEquals>::find (const key_t pKey) const
         return false;
     }
 
+    MULTITHREADED_MODE (
+    // mMutexAr[bucketId].lock ();
+    std::scoped_lock<std::mutex> scopedLock (mMutexAr[bucketId]);
+    )
+
     // get head of linked list at that position and iterate over it while trying to find the value
     listElem        = mBuckets[bucketId].mSlots[bucketPos];
     while (listElem != nullptr) {
 
         // if matching key was found, return succesful search
         if (mEquals (listElem->mKey, pKey)) {
+            // MULTITHREADED_MDOE (
+            // mMutexAr[bucketId].unlock ();
+            // )
+
             return true;
         }
         listElem    = listElem->mPtr;
     }
+
+    // MULTITHREADED_MDOE (
+    // mMutexAr[bucketId].unlock ();
+    // )
 
     return false;
 }
@@ -415,6 +476,11 @@ AgHashTable<key_t, mHashFunc, mEquals>::erase (const key_t pKey)
         return false;
     }
 
+    MULTITHREADED_MODE (
+    // mMutexAr[bucketId].lock ();
+    std::scoped_lock<std::mutex> scopedLock (mMutexAr[bucketId]);
+    )
+
     // get a pointer to the pointer to the next node
     // pointer to pointer allows for removing special head case
     listElem                    = &mBuckets[bucketId].mSlots[bucketPos];
@@ -446,11 +512,19 @@ AgHashTable<key_t, mHashFunc, mEquals>::erase (const key_t pKey)
             }
             )
 
+            // MULTITHREADED_MDOE (
+            // mMutexAr[bucketId].unlock ();
+            // )
+
             return true;
         }
 
         listElem    = &((*listElem)->mPtr);
     }
+
+    // MULTITHREADED_MDOE (
+    // mMutexAr[bucketId].unlock ();
+    // )
 
     return false;
 }
@@ -557,5 +631,6 @@ AgHashTable<key_t, mHashFunc, mEquals>::p_check_dimensions () const
 
 #undef  DBG_MODE
 #undef  NO_DBG_MODE
+#undef  MULTITHREADED_MODE
 
 #endif      // Header Guard
