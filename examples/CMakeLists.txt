@@ -23,4 +23,19 @@ add_executable (
     main.cpp
 )
 
+target_link_libraries (
+    main
+    pthread
+)
+
+add_executable (
+    simple_concurrency_test
+    simple_concurrency_test.cpp
+)
+
+target_link_libraries (
+    simple_concurrency_test
+    pthread
+)
+
 set_flags ()
