@@ -38,4 +38,14 @@ target_link_libraries (
     pthread
 )
 
+add_executable (
+    multiread_test
+    multiread_test.cpp
+)
+
+target_link_libraries (
+    multiread_test
+    pthread
+)
+
 set_flags ()
