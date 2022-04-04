@@ -22,7 +22,11 @@
 #if defined (BUCKET_LOCK)
 #define AG_HASH_TABLE_MULTITHREADED_MODE
 #endif
+
 #include "AgHashTable.h"
+
+#define NUM_ELEMENTS        10'000'000
+#define ELEMENT_RANGE       1'000'000
 
 namespace   chrono = std::chrono;
 
@@ -58,24 +62,24 @@ NoLock::Init ()
 void
 NoLock::Insert ()
 {
-    for (int32_t i = 0; i < 10'000'000; ++i) {
-        table.insert (NoLock::sGen () % 1'000'000);
+    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
+        table.insert (NoLock::sGen () % (ELEMENT_RANGE));
     }
 }
 
 void
 NoLock::Erase ()
 {
-    for (int32_t i = 0; i < 10'000'000; ++i) {
-        table.erase (NoLock::sGen () % 1'000'000);
+    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
+        table.erase (NoLock::sGen () % (ELEMENT_RANGE));
     }
 }
 
 void
 NoLock::Find ()
 {
-    for (int32_t i = 0; i < 10'000'000; ++i) {
-        NoLock::sCntr   += (uint64_t) table.find (NoLock::sGen () % 1'000'000);
+    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
+        NoLock::sCntr   += (uint64_t) table.find (NoLock::sGen () % (ELEMENT_RANGE));
     }
 
     std::cout << "NO LOCK: " << NoLock::sCntr << '\n';
@@ -112,9 +116,9 @@ YesLock::Init ()
 void
 YesLock::Insert ()
 {
-    for (int32_t i = 0; i < 10'000'000; ++i) {
+    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
         sTableMutex.lock ();
-        table.insert (YesLock::sGen () % 1'000'000);
+        table.insert (YesLock::sGen () % (ELEMENT_RANGE));
         sTableMutex.unlock ();
     }
 }
@@ -122,9 +126,9 @@ YesLock::Insert ()
 void
 YesLock::Erase ()
 {
-    for (int32_t i = 0; i < 10'000'000; ++i) {
+    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
         sTableMutex.lock ();
-        table.erase (YesLock::sGen () % 1'000'000);
+        table.erase (YesLock::sGen () % (ELEMENT_RANGE));
         sTableMutex.unlock ();
     }
 }
@@ -132,9 +136,9 @@ YesLock::Erase ()
 void
 YesLock::Find ()
 {
-    for (int32_t i = 0; i < 10'000'000; ++i) {
+    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
         sTableMutex.lock ();
-        YesLock::sCntr   += (uint64_t) table.find (YesLock::sGen () % 1'000'000);
+        YesLock::sCntr   += (uint64_t) table.find (YesLock::sGen () % (ELEMENT_RANGE));
         sTableMutex.unlock ();
     }
 
