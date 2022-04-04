@@ -28,6 +28,9 @@
 #define     MULTITHREADED_MODE(...)
 #endif
 
+#include <mutex>
+#include <shared_mutex>
+
 #include <type_traits>
 #include <limits>
 
@@ -123,7 +126,7 @@ class AgHashTable {
     )
 
     MULTITHREADED_MODE (
-    std::mutex          *mLockAr;
+    std::shared_mutex   *mLockAr;
     )
 
 
@@ -200,9 +203,9 @@ AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable ()
     MULTITHREADED_MODE (
 
     // allocate array of mutex's, return if could not allocate
-    mLockAr        = new (std::nothrow) std::mutex[mBucketCount];
+    mLockAr        = new (std::nothrow) std::shared_mutex[mBucketCount];
     if (mLockAr == nullptr) {
-        DBG_MODE (std::cout << "Could not allocate array of mutexs while constructing\n";)
+        DBG_MODE (std::cout << "Could not allocate array of locks while constructing\n";)
         return;
     }
 
@@ -308,7 +311,7 @@ AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
 
     MULTITHREADED_MODE (
     // mLockAr[bucketId].lock ();
-    std::lock_guard<std::mutex> scopedLock (mLockAr[bucketId]);
+    std::lock_guard<std::shared_mutex> scopedLock (mLockAr[bucketId]);
     )
 
     // if the bucket has not been allocated yet, then it needs to be
@@ -419,7 +422,7 @@ AgHashTable<key_t, mHashFunc, mEquals>::find (const key_t pKey) const
 
     MULTITHREADED_MODE (
     // mLockAr[bucketId].lock ();
-    std::lock_guard<std::mutex> scopedLock (mLockAr[bucketId]);
+    std::shared_lock<std::shared_mutex> scopedLock (mLockAr[bucketId]);
     )
 
     // get head of linked list at that position and iterate over it while trying to find the value
@@ -478,7 +481,7 @@ AgHashTable<key_t, mHashFunc, mEquals>::erase (const key_t pKey)
 
     MULTITHREADED_MODE (
     // mLockAr[bucketId].lock ();
-    std::lock_guard<std::mutex> scopedLock (mLockAr[bucketId]);
+    std::lock_guard<std::shared_mutex> scopedLock (mLockAr[bucketId]);
     )
 
     // get a pointer to the pointer to the next node
