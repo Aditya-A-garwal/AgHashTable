@@ -48,4 +48,14 @@ target_link_libraries (
     pthread
 )
 
+add_executable (
+    sparse_data
+    sparse_data.cpp
+)
+
+target_link_libraries (
+    sparse_data
+    pthread
+)
+
 set_flags ()
