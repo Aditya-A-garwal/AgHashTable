@@ -328,7 +328,7 @@ main (void)
     }
 
     std::cout << "Size of table: " << table.size () << std::endl;
-    std::cout << "Slots used: " << table.slots_used () << std::endl;
+    std::cout << "Slots used: " << table.total_slots_used () << std::endl;
 
     return 0;
 }
