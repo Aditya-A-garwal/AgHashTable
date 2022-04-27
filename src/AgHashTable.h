@@ -6,6 +6,7 @@
  *
  */
 
+//! if constexpr introduces a new scope, all locks are broken till this is resolved
 
 #ifndef AG_HASH_TABLE_GUARD_H
 
@@ -56,6 +57,7 @@ ag_hashtable_default_equals (const val_t &pA, const val_t &pB)
     return (pA == pB);
 }
 
+
 /**
  * @brief                   AgHashtable is an implementation of the hashtable data structure
  *
@@ -66,574 +68,535 @@ template <typename key_t, auto mHashFunc = ag_pearson_16_hash, auto mEquals = ag
 class AgHashTable {
 
 
-    protected:
+
+protected:
+
 
 
     /**
-     * @brief               Node in the linked list at a slot
+     * @brief               Node in the linked list at each position for storing keys
      *
      */
     struct node_t {
 
-        node_t      *mPtr       {nullptr};      /* Pointer to next node in the linked list */
-        key_t       mKey;                       /* The key value */
+        key_t           key;                            /** Stores the key in node */
+        node_t          *nextPtr;                       /** Pointer to the next node in the linked list */
 
-        ~node_t () { delete mPtr; }
+        ~node_t () { delete nextPtr; }
     };
 
+
     /**
-     * @brief               Structure for encapsulating buckets
+     * @brief               Bucket (for recursively holding more buckets, or linked list containing keys)
      *
      */
     struct bucket_t {
 
-        uint64_t    mSize       {0};            /* Number of elements currently in the bucket */
-        node_t      **mSlots    {nullptr};      /* Pointer to the array storing the slots in the bucket */
+        /**
+         * Type to alias pointer to internal array of slots, which might be of linked lists or
+         * buckets recursively. In case of linked lists, is of node_list_array_t and in case
+         * of buckets, is of bucket_array_t
+         */
+        using           slot_t  = void *;
+
+        uint64_t        keyCount        {0ULL};         /** Number of keys in the bucket (at the lowest level) */
+        slot_t          slotArray       {nullptr};      /** Array of slots (for linked lists or buckets) */
     };
 
 
-    using       node_ptr_t  = node_t *;         /* Helper type to encapsulate pointers to nodes */
+    using       slot_t              = typename bucket_t::slot_t;
 
-    // make sure that the equals comparator is callable
-    static_assert (std::is_invocable <decltype (mEquals), const key_t, const key_t>::value, "Given Equals comparator must be callable");
+    using       node_ptr_t          = node_t *;         /** Alias for node_t * for greater readability */
+    using       node_list_t         = node_t *;         /** Alias for node_t * for explicit linked list instantiation */
+    using       node_list_array_t   = node_list_t *;    /** Alias for node_t ** for explicit instantiation of linked list arrays */
 
-    // make sure that the hash function is callable and returns an unsigned integral type of not more than 16 bits
-    static_assert (std::is_invocable <decltype (mHashFunc), const uint8_t *, const uint64_t>::value, "hash function should be callable");
-    using       hash_t      = typename std::invoke_result<decltype (mHashFunc), const uint8_t *, const uint64_t>::type;
-    static_assert (std::is_unsigned<hash_t>::value, "hash function should return unsigned type");
-
-    //! The bitness of the hash function, and consequently the value of sMaxHashValue should be recievable from the user as well
-
-    static constexpr uint64_t   sHashBitness        = 8 * sizeof (hash_t);                      /* Bitness of the hash value */
-
-    static constexpr uint64_t   sBucketCountInit    = 4096;                                     /* Initial number of buckets to start with */
-    static constexpr uint64_t   sMaxHashValue       = (sHashBitness == 64) ?                    /* Maximum hash value possible for function of given bitness */
-                                                        (0xffffffffffffffffULL) :
-                                                        ((1ULL << sHashBitness) - 1);
+    using       bucket_ptr_t        = bucket_t *;       /** Alias for bucket_t * for greater readability */
+    using       bucket_array_t      = bucket_t *;       /** Alias for bucket_t * for explicit instantiation of bucket arrays */
 
 
-    uint64_t            mBucketCount        {sBucketCountInit};                                     /* Number of buckets present in the table totally (includes allcoated and not unallocated) */
-    uint64_t            mBucketSlotCount    {1ULL << (sHashBitness - 12)};                          /* Number of slots in each bucket */
+    /**
+     * Type of integer returned by given hash function, must be unsigned
+     */
+    using       hash_t              = typename std::invoke_result<decltype (mHashFunc), const uint8_t *, const uint64_t>::type;
+    static_assert (std::is_unsigned<hash_t>::value, "Return type of hash function must be unsigned integer");
 
-    // Note - 12 = log2(4096), which is the initial bucket count
 
-    bucket_t            *mBuckets;                                                                  /* Member array to buckets */
-    uint64_t            mSize               {0ULL};                                                 /* Number of elements in the table */
-    uint64_t            mBucketsUsed        {0ULL};                                                 /* Number of buckets which have atleast one element, and are therefore, allocated */
+    /** Bitness of the hash function being used */
+    static constexpr uint64_t   sHashBitness    = sizeof (hash_t) * 8ULL;
+    /** Number of slots in each bucket */
+    static constexpr uint64_t   sSlotCount      = 2ULL;
+    /** log2(sSlotCount) used while calculating the slot id at each level */
+    static constexpr uint64_t   sSlotCountLog   = 1ULL;
+    /** Bitmask to use for extracting slot ID from hash at each level */
+    static constexpr uint64_t   sBitMask        = (sSlotCountLog != 64) ? ((1ULL << sSlotCountLog) - 1ULL) : (0xffffffffffffffffULL);
+    static_assert ((1ULL << sSlotCountLog) == sSlotCount, "sSLotCount should be 2 raised to sSlotCountLog");
 
-    DBG_MODE (
-    uint64_t            mSlotsUsed          {0ULL};                                                 /* Number of slots used in the table to accomodate keys*/
-    )
+
+    /** Number of levels of nesting for buckets (last level is contains linked lists) */
+    static constexpr uint64_t   sLvlCount       = (sHashBitness / sSlotCountLog) + (uint64_t)((sHashBitness % sSlotCountLog) != 0);
+
+
+    bucket_t                mBucket;                    /** Top level bucket (recursively holds more buckets or linked lists at each position) */
 
     MULTITHREADED_MODE (
-    std::shared_mutex   *mLockAr;
+    std::shared_mutex       *mLocks;                    /** Pointer to array storing the locks */
     )
 
-
-    public:
-
-
-    //      Constructors
-
-    AgHashTable                                 ();
-    AgHashTable                                 (const AgHashTable<key_t, mHashFunc, mEquals> &pOther)   = delete;
-
-    //      Destructor
-
-    ~AgHashTable                                ();
-
-    //      Modifiers
-
-    bool                initialize_if_not       ();
-
-    bool                insert                  (const key_t pKey);
-    bool                erase                   (const key_t pKey);
-
-    //      Searching
-
-    bool                find                    (const key_t pKey) const;
-
-    //      Getters
-
-    bool                initialized             () const;
-
-    uint64_t            size                    () const;
-    uint64_t            key_count               () const;
-
-    uint64_t            bucket_count            () const;
-    uint64_t            buckets_used            () const;
-
-    uint64_t            bucket_slot_count       () const;
-    uint64_t            bucket_key_count        (const uint64_t pIndex) const;
-
-    DBG_MODE (
-    uint64_t            total_slots_used        () const;
-    )
+    uint64_t                mKeyCount       {0ULL};     /** Number of keys present in the hashtable */
 
 
 
-    private:
+public:
 
 
 
-    bool                p_check_dimensions      () const;
+    //  Constructors
+
+    AgHashTable     ();
+    AgHashTable     (const AgHashTable<key_t, mHashFunc, mEquals> &) = delete;
+
+    //  Destructors
+
+    ~AgHashTable    ();
+
+    //  Sanity checking
+
+    bool            initialized         () const;
+
+    //  Getters
+
+    bool            find                (const key_t pKey) const;
+    uint64_t        size                () const;
+    uint64_t        keyCount            () const;
+
+    //  Setters/Modifiers
+
+    bool            insert              (const key_t pKey);
+    bool            erase               (const key_t pKey);
+
+
+
+private:
+
+
+
+    // Getters
+
+    template <uint64_t pLvl>
+    bool    find_util           (const key_t &pKey, const hash_t &pKeyHash, const bucket_ptr_t pSlots) const;
+
+    //  Setters/Modifiers
+
+    template <uint64_t pLvl>
+    bool    insert_util         (const key_t &pKey, const hash_t &pKeyHash, bucket_ptr_t pSlots);
+    template <uint64_t pLvl>
+    bool    erase_util          (const key_t &pKey, const hash_t &pKeyHash, bucket_ptr_t pSlots);
+
+    template <uint64_t pLvl>
+    void    delete_bucket       (bucket_ptr_t pBucket);
 };
 
 /**
- * @brief                           Construct a new AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable object
+ * @brief               Construct a new AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable object
+ *
  */
 template <typename key_t, auto mHashFunc, auto mEquals>
 AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable ()
 {
-    if (!p_check_dimensions ()) {
-        DBG_MODE (std::cout << "Dimensioning of table is incorrect\n";)
-        DBG_MODE (std::cout << "Bucket Count:\t\t" << mBucketCount << '\n';)
-        DBG_MODE (std::cout << "Bucket Slot Count:\t" << mBucketSlotCount << '\n';)
-        DBG_MODE (std::cout << "Max Hash Value:\t\t" << sMaxHashValue << '\n';)
-        return;
-    }
-
-    // allocate array of buckets, return if could not allocate
-    mBuckets        = new (std::nothrow) bucket_t[mBucketCount];
-    if (mBuckets == nullptr) {
-        DBG_MODE (std::cout << "Could not allocate buckets while constructing\n";)
-        return;
-    }
-
     MULTITHREADED_MODE (
-
-    // allocate array of mutex's, return if could not allocate
-    mLockAr        = new (std::nothrow) std::shared_mutex[mBucketCount];
-    if (mLockAr == nullptr) {
-        DBG_MODE (std::cout << "Could not allocate array of locks while constructing\n";)
-        return;
+    mLocks      = new (std::nothrow) std::shared_mutex[sSlotCount];
+    DBG_MODE (
+    if (mLocks == nullptr) {
+        std::cout << "Allocation of locks failed while constructing\n";
     }
-
+    )
     )
 }
 
 /**
- * @brief                           Returns if the table could be succesfully initialized
+ * @brief              Destroy the AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable object
  *
- * @note                            If the function returns false, using the table results in undefined behaviour
+ */
+template <typename key_t, auto mHashFunc, auto mEquals>
+AgHashTable<key_t, mHashFunc, mEquals>::~AgHashTable ()
+{
+    delete_bucket<0> (&mBucket);
+}
+
+/**
+ * @brief               Check if the hashtable could be successfuly initialized
  *
- * @return true                     If the table was succesfully initialized, and is in a useable state
- * @return false                    If the table could not be succesfully initialized, and is not in a useable state
+ * @return true         If the hash table could be successfuly initialized
+ * @return false        If the hash table could not be successfuly initialized
  */
 template <typename key_t, auto mHashFunc, auto mEquals>
 bool
 AgHashTable<key_t, mHashFunc, mEquals>::initialized () const
 {
     MULTITHREADED_MODE (
-    return (mBuckets != nullptr) && (mLockAr != nullptr);
+    if (mLocks == nullptr) {
+        return false;
+    }
     )
-    return (mBuckets != nullptr);
-}
-
-/**
- * @brief                           Tries to initialize the table if it could not be succesfully initialized
- *
- * @return true                     If the table was not already initialized and could be succesfully initialized
- * @return false                    If the table was already initialized or could not be initialized
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-bool
-AgHashTable<key_t, mHashFunc, mEquals>::initialize_if_not ()
-{
-    if (mBuckets != nullptr) {
-        DBG_MODE (std::cout << "Table has already been initialized\n";)
-        return false;
-    }
-
-    mBuckets        = new (std::nothrow) bucket_t[mBucketCount];
-    if (mBuckets == nullptr) {
-        DBG_MODE (std::cout << "Could not allocate buckets while trying to re-init\n";)
-        return false;
-    }
 
     return true;
 }
 
 /**
- * @brief                           Destroy the AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable object
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-AgHashTable<key_t, mHashFunc, mEquals>::~AgHashTable ()
-{
-    for (uint64_t bucket = 0; bucket < mBucketCount; ++bucket) {
-
-        // if the current bucket has never been allocated, skip it
-        if (mBuckets[bucket].mSlots == nullptr) {
-            continue;
-        }
-
-        // go through every slot and delete the entire linked list at that slot
-        // deleting a single element at that position should be able to delete the entire list
-        for (uint64_t slot = 0; slot < mBucketSlotCount; ++slot) {
-            delete mBuckets[bucket].mSlots[slot];
-        }
-
-        // delete this bucket
-        delete[] mBuckets[bucket].mSlots;
-    }
-
-    delete[] mBuckets;
-
-    MULTITHREADED_MODE (delete[] mLockAr;)
-}
-
-/**
- * @brief                           Attempts to insert a key into the hash table
+ * @brief               Search for the supplied key in the hashtable
  *
- * @param pKey                      Key to insert into the table
+ * @param pKey          Key to search for
  *
- * @return true                     If no duplicate key was found and was inserted succesfully
- * @return false                    If key could not be inserted succesfully
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-bool
-AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
-{
-    uint64_t    keyHash;                        // hash of the supplied key to insert
-    uint64_t    bucketId;                       // bucket in which the key will be inserted
-    uint64_t    bucketPos;                      // position in bucket in which the key will be inserted
-
-    node_ptr_t  *listElem;                      // pointer to node ptr, for iterating over the linked list in the slot
-
-    node_ptr_t  node;                           // pointer to allocated new node
-
-    // calculate the hash of the key and find its bucket and position in the bucket
-    // the bucket is the sBucketSizeLog Most Significant bits, while the
-    // position in the bucket is the remaining Least Significant bits of the hash
-    keyHash                     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    bucketId                    = keyHash / mBucketSlotCount;
-    bucketPos                   = keyHash % mBucketSlotCount;
-
-    MULTITHREADED_MODE (
-    // mLockAr[bucketId].lock ();
-    std::lock_guard<std::shared_mutex> scopedLock (mLockAr[bucketId]);
-    )
-
-    // if the bucket has not been allocated yet, then it needs to be
-    if (mBuckets[bucketId].mSlots == nullptr) {
-
-        // allocate the array of the current bucket, return failed insertion if could not allocate
-        mBuckets[bucketId].mSlots   = new (std::nothrow) node_ptr_t[mBucketSlotCount];
-        if (mBuckets [bucketId].mSlots == nullptr) {
-            DBG_MODE(std::cout << "Could not allocate bucket array while inserting\n";)
-
-            // MULTITHREADED_MDOE (
-            // mLockAr[bucketId].unlock ();
-            // )
-
-            return false;
-        }
-
-        // go over each slot in the bucket and make the linked list point to nullptr
-        for (uint64_t i = 0; i < mBucketSlotCount; ++i) {
-            mBuckets[bucketId].mSlots[i]    = nullptr;
-        }
-    }
-
-    // get a pointer to the pointer to the next node
-    // pointer to pointer allows for removing special head case
-    listElem                    = &mBuckets[bucketId].mSlots[bucketPos];
-
-    DBG_MODE (
-
-    if (mBuckets[bucketId].mSlots[bucketPos] == nullptr) {
-        mSlotsUsed              += 1;
-    }
-    )
-
-    // while the pointer being pointed to, does not point to null, the end of the list has not been reached
-    while ((*listElem) != nullptr) {
-
-        // in case a matching element was found, return failed insertion (duplicates are not allowed)
-        if (mEquals ((*listElem)->mKey, pKey)) {
-            // MULTITHREADED_MDOE (
-            // mLockAr[bucketId].unlock ();
-            // )
-            return false;
-        }
-
-        listElem    = &((*listElem)->mPtr);
-    }
-
-    // allocate a new node containing the key, return failed insertion if could not allocate
-    node                        = new (std::nothrow) node_t {nullptr, pKey};
-    if (node == nullptr) {
-        DBG_MODE (std::cout << "Could not allocate new node while inserting\n";)
-
-        // MULTITHREADED_MDOE (
-        // mLockAr[bucketId].unlock ();
-        // )
-
-        return false;
-    }
-
-    // place the new node at this position
-    (*listElem)                 = node;
-
-    // increment size of bucket and size of table
-    if (mBuckets[bucketId].mSize == 0) {
-        mBucketsUsed            += 1;
-    }
-
-    mBuckets[bucketId].mSize    += 1;
-    mSize                       += 1;
-
-    // MULTITHREADED_MDOE (
-    // mLockAr[bucketId].unlock ();
-    // )
-
-    return true;
-}
-
-/**
- * @brief                           Searches for a key in the hashtable
- *
- * @param pKey                      Key to search for
- *
- * @return true                     If key exists in the hashtable
- * @return false                    If key does not exist in the hashtable
+ * @return true         If the supplied key is present in the table
+ * @return false        If the supplied key is not present in the table
  */
 template <typename key_t, auto mHashFunc, auto mEquals>
 bool
 AgHashTable<key_t, mHashFunc, mEquals>::find (const key_t pKey) const
 {
-    uint64_t    keyHash;                        // hash of the supplied key to insert
-    uint64_t    bucketId;                       // bucket in which the key will be inserted
-    uint64_t    bucketPos;                      // position in bucket in which the key will be inserted
+    hash_t      keyHash;
 
-    node_ptr_t  listElem ;                      // pointer to node in linked list
+    keyHash     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
 
-    // calculate the hash of they key and find its bucket and position in the bucket
-    // the bucket is the sBucketSizeLog Most Significant bits, while the
-    // position in the bucket is the remaining Least Significant bits of the hash
-    keyHash         = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    bucketId        = keyHash / mBucketSlotCount;
-    bucketPos       = keyHash % mBucketSlotCount;
-
-    // the bucket itself does not exist, search unsuccesful
-    if (mBuckets[bucketId].mSlots == nullptr) {
-        return false;
-    }
-
-    MULTITHREADED_MODE (
-    // mLockAr[bucketId].lock ();
-    std::shared_lock<std::shared_mutex> scopedLock (mLockAr[bucketId]);
-    )
-
-    // get head of linked list at that position and iterate over it while trying to find the value
-    listElem        = mBuckets[bucketId].mSlots[bucketPos];
-    while (listElem != nullptr) {
-
-        // if matching key was found, return succesful search
-        if (mEquals (listElem->mKey, pKey)) {
-            // MULTITHREADED_MDOE (
-            // mLockAr[bucketId].unlock ();
-            // )
-
-            return true;
-        }
-        listElem    = listElem->mPtr;
-    }
-
-    // MULTITHREADED_MDOE (
-    // mLockAr[bucketId].unlock ();
-    // )
-
-    return false;
+    return  find_util<0> (pKey, keyHash, (const bucket_ptr_t)&mBucket);
 }
 
 /**
- * @brief                           Attempts to erase a key from the hash table
+ * @brief               Return the number of keys in the hastable (identical to keyCount method)
  *
- * @param pKey                      Key to erase from the table
- *
- * @return true                     If the key was succesfully found and removed
- * @return false                    If a matching key could not be found or removed
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-bool
-AgHashTable<key_t, mHashFunc, mEquals>::erase (const key_t pKey)
-{
-    uint64_t    keyHash;                        // hash of the supplied key to insert
-    uint64_t    bucketId;                       // bucket in which the key will be inserted
-    uint64_t    bucketPos;                      // position in bucket in which the key will be inserted
-
-    node_ptr_t  *listElem;                      // pointer to node ptr, for iterating over the linked list in the slot
-
-    node_ptr_t  node;                           // pointer to allocated new node
-
-    // calculate the hash of they key and find its bucket and position in the bucket
-    // the bucket is the sBucketSizeLog Most Significant bits, while the
-    // position in the bucket is the remaining Least Significant bits of the hash
-    keyHash                     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    bucketId                    = keyHash / mBucketSlotCount;
-    bucketPos                   = keyHash % mBucketSlotCount;
-
-    // if the bucket itself does not exist, return failed erase
-    if (mBuckets[bucketId].mSlots == nullptr) {
-        return false;
-    }
-
-    MULTITHREADED_MODE (
-    // mLockAr[bucketId].lock ();
-    std::lock_guard<std::shared_mutex> scopedLock (mLockAr[bucketId]);
-    )
-
-    // get a pointer to the pointer to the next node
-    // pointer to pointer allows for removing special head case
-    listElem                    = &mBuckets[bucketId].mSlots[bucketPos];
-
-    // while the pointer being pointed to, does not point to null, the end of the list has not been reached
-    while ((*listElem) != nullptr) {
-
-        // if matching key was found
-        if (mEquals ((*listElem)->mKey, pKey)) {
-
-            // take out the current node and make the previous node point to the next node, delete the node
-            node                        = *listElem;
-            (*listElem)                 = node->mPtr;
-            node->mPtr                  = nullptr;
-
-            delete node;
-
-            mBuckets[bucketId].mSize    -= 1;
-            mSize                       -= 1;
-
-            if (mBuckets[bucketId].mSize == 0) {
-                mBucketsUsed            += 1;
-            }
-
-            DBG_MODE (
-
-            if (mBuckets[bucketId].mSlots[bucketPos] == nullptr) {
-                mSlotsUsed              -= 1;
-            }
-            )
-
-            // MULTITHREADED_MDOE (
-            // mLockAr[bucketId].unlock ();
-            // )
-
-            return true;
-        }
-
-        listElem    = &((*listElem)->mPtr);
-    }
-
-    // MULTITHREADED_MDOE (
-    // mLockAr[bucketId].unlock ();
-    // )
-
-    return false;
-}
-
-/**
- * @brief                           Returns the number of elements in the hashtable (identical to method key_count ())
- *
- * @return uint64_t                 Number of elements in the table
+ * @return uint64_t     Number of keys in the table
  */
 template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
 AgHashTable<key_t, mHashFunc, mEquals>::size () const
 {
-    return mSize;
+    return mKeyCount;
 }
 
 /**
- * @brief                           Returns the number of elements in the hashtable (identical to method size ())
+ * @brief               Return the number of keys in the hastable (identical to size method)
  *
- * @return uint64_t                 Number of elements in the table
+ * @return uint64_t     Number of keys in the table
  */
 template <typename key_t, auto mHashFunc, auto mEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::key_count () const
+AgHashTable<key_t, mHashFunc, mEquals>::keyCount () const
 {
-    return mSize;
+    return mKeyCount;
 }
 
 /**
- * @brief                           Returns the total number of buckets in the table (allocated and unallocated)
+ * @brief               Attempt to insert the supplied key in the hashtable
  *
- * @return uint64_t                 Number of buckets which the hash table can have
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::bucket_count () const
-{
-    return mBucketCount;
-}
-
-/**
- * @brief                           Returns the number of buckets currently being used (having atleast one key)
+ * @param pKey          Key to insert
  *
- * @return uint64_t                 Number of buckets currently being used
+ * @return true         If the supplied key could be successfuly inserted
+ * @return false        If the supplied key could not be successfuly inserted (allocation failed at some step or duplicate found)
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
-uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::buckets_used () const
-{
-    return mBucketsUsed;
-}
-
-/**
- * @brief                           Returns the total number of slots in a bucket
- *
- * @return uint64_t                 Number of slots in a bucket
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::bucket_slot_count () const
-{
-    return mBucketSlotCount;
-}
-
-/**
- * @brief                           Returns the number of keys present in a given bucket
- *
- * @param pIndex                    Index of the bucket to be checked
- * @return uint64_t                 Number of keys in the bucket at position pIndex
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::bucket_key_count (const uint64_t pIndex) const
-{
-    return mBuckets[pIndex].mSize;
-}
-
-DBG_MODE (
-
-/**
- * @brief                           Returns number of slots used in the hash table to accomodate keys
- *
- * @return uint64_t                 Number of slots used to accomodate present keys
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::total_slots_used () const
-{
-    return mSlotsUsed;
-}
-)
-
 template <typename key_t, auto mHashFunc, auto mEquals>
 bool
-AgHashTable<key_t, mHashFunc, mEquals>::p_check_dimensions () const
+AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
 {
-    uint64_t    n;
+    hash_t      keyHash;
 
-    n   = (mBucketCount - 1) * mBucketSlotCount;
-    n   += -1 + mBucketSlotCount;
+    keyHash     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
 
-    return (n >= sMaxHashValue);
+    return  insert_util<0> (pKey, keyHash, &mBucket);
+}
+
+/**
+ * @brief               Attempt to erase the supplied key from the hashtable
+ *
+ * @param pKey          Key to erase
+ *
+ * @return true         If the supplied key could be successfuly erased
+ * @return false        If the supplied key could not be successfuly erased (no matching key found)
+ */
+template <typename key_t, auto mHashFunc, auto mEquals>
+bool
+AgHashTable<key_t, mHashFunc, mEquals>::erase (const key_t pKey)
+{
+    hash_t      keyHash;
+
+    keyHash     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+
+    return  erase_util<0> (pKey, keyHash, &mBucket);
+}
+
+/**
+ * @brief
+ *
+ * @tparam pLvl
+ *
+ * @param pKey
+ * @param pKeyHash
+ * @param pSlots
+ *
+ * @return true
+ * @return false
+ */
+template <typename key_t, auto mHashFunc, auto mEquals>
+template <uint64_t pLvl>
+bool
+AgHashTable<key_t, mHashFunc, mEquals>::find_util (const key_t &pKey, const hash_t &pKeyHash, const bucket_ptr_t pBucket) const
+{
+    uint64_t    slotId;
+
+    slotId      = (pKeyHash >> (pLvl * sSlotCountLog)) & (sBitMask);
+
+    if constexpr (pLvl == 0) {
+        MULTITHREADED_MODE (
+        // lock this entire bucket, since this is the top level
+        std::shared_lock<std::shared_mutex> scopedLock (mLocks[slotId]);
+        )
+    }
+
+    // if the slots in the bucket have not been init yet, the key obviously does not exist
+    if (pBucket->slotArray == nullptr) {
+        return false;
+    }
+
+    // not reached bottom layer (current layer contains buckets)
+    if constexpr (pLvl != (sLvlCount - 1)) {
+        return find_util<pLvl + 1> (pKey, pKeyHash, &(((bucket_ptr_t)(pBucket->slotArray))[slotId]));
+    }
+    // reached bottom layer (current layer contains linked lists)
+    else {
+
+        node_list_t     *slotArray;
+        node_ptr_t      listElem;
+
+        slotArray   = (node_list_t *)(pBucket->slotArray);
+        listElem    = slotArray[slotId];
+
+        // iterate through the linked list at this position, trying to find a matching key
+        while (listElem != nullptr) {
+
+            // if a matching key is found, return true to indicate successful search
+            if (mEquals (listElem->key, pKey)) {
+                return true;
+            }
+
+            listElem    = listElem->nextPtr;
+        }
+
+        return false;
+    }
+}
+
+/**
+ * @brief
+ *
+ * @tparam pLvl
+ *
+ * @param pKey
+ * @param pKeyHash
+ * @param pBucket
+ *
+ * @return true
+ * @return false
+ */
+template <typename key_t, auto mHashFunc, auto mEquals>
+template <uint64_t pLvl>
+bool
+AgHashTable<key_t, mHashFunc, mEquals>::insert_util (const key_t &pKey, const hash_t &pKeyHash, bucket_ptr_t pBucket)
+{
+    uint64_t    slotId;
+
+    slotId      = (pKeyHash >> (pLvl * sSlotCountLog)) & (sBitMask);
+
+    // not reached bottom layer (current layer contains buckets)
+    if constexpr (pLvl != (sLvlCount - 1)) {
+
+        bucket_ptr_t    bucketArray;
+
+        bucketArray     = (bucket_ptr_t)(pBucket->slotArray);
+
+        // if the slot has not been init yet, try to init and return false on failure
+        if (pBucket->slotArray == nullptr) {
+
+            bucketArray         = new (std::nothrow) bucket_t[sSlotCount];
+            pBucket->slotArray  = (slot_t)(bucketArray);
+            if (bucketArray == nullptr) {
+                return false;
+            }
+
+            for (uint64_t slot = 0; slot < sSlotCount; ++slot) {
+                bucketArray[slot] = {0ULL, nullptr};
+            }
+        }
+
+        // try to recursively insert, and increment current bucket's key count if successful
+        if (insert_util<pLvl + 1> (pKey, pKeyHash, &(bucketArray[slotId]))) {
+            ++(pBucket->keyCount);
+            return true;
+        }
+
+        // if recursive insertion failed, return false to indicate failure
+        return false;
+    }
+    // reached bottom layer (current layer contains linked lists)
+    else {
+
+        node_list_t     *listArray;
+        node_ptr_t      *listElem;
+        node_ptr_t      newKey;
+
+        listArray       = (node_list_t *)(pBucket->slotArray);
+
+        // if the slot has not been init yet, try to init and return false on failure
+        if (pBucket->slotArray == nullptr) {
+
+            listArray           = new (std::nothrow) node_list_t[sSlotCount];
+            pBucket->slotArray  = (slot_t)(listArray);
+            if (listArray == nullptr) {
+                return false;
+            }
+
+            for (uint64_t slot = 0; slot < sSlotCount; ++slot) {
+                listArray[slot]     = nullptr;
+            }
+        }
+
+        newKey          = new (std::nothrow) node_t {pKey, nullptr};
+        listElem        = &(listArray[slotId]);
+
+        // go the end of the linked list, while making sure no duplicate key exists
+        while ((*listElem) != nullptr) {
+
+            // if a duplicate key is found, then return false to indicate failed insertion
+            if (mEquals ((*listElem)->key, pKey)) {
+                return false;
+            }
+
+            listElem    = &((*listElem)->nextPtr);
+        }
+
+        (*listElem)     = newKey;
+        ++(pBucket->keyCount);
+        ++mKeyCount;
+
+        return true;
+    }
+}
+
+/**
+ * @brief
+ *
+ * @tparam pLvl
+ *
+ * @param pKey
+ * @param pKeyHash
+ * @param pSlots
+ *
+ * @return true
+ * @return false
+ */
+template <typename key_t, auto mHashFunc, auto mEquals>
+template <uint64_t pLvl>
+bool
+AgHashTable<key_t, mHashFunc, mEquals>::erase_util (const key_t &pKey, const hash_t &pKeyHash, bucket_ptr_t pBucket)
+{
+    uint64_t    slotId;
+
+    slotId      = (pKeyHash >> (pLvl * sSlotCountLog)) & (sBitMask);
+
+    if constexpr (pLvl == 0) {
+        MULTITHREADED_MODE (
+        // lock this entire bucket, since this is the top level
+        std::lock_guard<std::shared_mutex> scopedLock (mLocks[slotId]);
+        )
+    }
+
+    if constexpr (pLvl != (sLvlCount - 1)) {
+
+        // if the slot has not been init yet, the key obviously does not exist, return false
+        if (pBucket->slotArray == nullptr) {
+            return false;
+        }
+
+        // try to recursively erase, and decrement current bucket's key count if successful
+        if (erase_util<pLvl + 1> (pKey, pKeyHash, &(((bucket_ptr_t)(pBucket->slotArray))[slotId]))) {
+            --(pBucket->keyCount);
+            return true;
+        }
+
+        // if recursive deletion failed, return false to indicate failure
+        return false;
+    }
+    else {
+
+        node_ptr_t  *listElem;
+        node_ptr_t  resultant;
+
+        // if the slot has not been init yet, the key obviously does not exist, return false
+        if (pBucket->slotArray == nullptr) {
+            return false;
+        }
+
+        listElem    = &(((node_list_t *)(pBucket->slotArray))[slotId]);
+
+        // iterate over the linked list, trying to find a matching node
+        while ((*listElem) != nullptr) {
+
+            // if a duplicate key is found, then return true to indicate successful deletion
+            if (mEquals ((*listElem)->key, pKey)) {
+
+                resultant           = *listElem;
+                (*listElem)         = (*listElem)->nextPtr;
+                resultant->nextPtr  = nullptr;
+
+                delete resultant;
+
+                --(pBucket->keyCount);
+                --mKeyCount;
+
+                return true;
+            }
+            listElem        = &((*listElem)->nextPtr);
+        }
+
+        return false;
+    }
+}
+
+template <typename key_t, auto mHashFunc, auto mEquals>
+template <uint64_t pLvl>
+void
+AgHashTable<key_t, mHashFunc, mEquals>::delete_bucket (bucket_ptr_t pBucket)
+{
+    if (pBucket->slotArray == nullptr) {
+        return;
+    }
+
+    if constexpr (pLvl != (sLvlCount - 1)) {
+
+        bucket_ptr_t    bucketArray;
+
+        bucketArray     = (bucket_ptr_t)(pBucket->slotArray);
+
+        for (uint64_t slot = 0; slot < sSlotCount; ++slot) {
+            delete_bucket<pLvl + 1> (&(bucketArray[slot]));
+        }
+
+        delete bucketArray;
+    }
+    else {
+
+        node_list_t     *listArray;
+
+        listArray       = (node_list_t *)(pBucket->slotArray);
+
+        for (uint64_t slot = 0; slot < sSlotCount; ++slot) {
+            delete listArray[slot];
+        }
+
+        delete listArray;
+    }
 }
 
 #undef  DBG_MODE
 #undef  NO_DBG_MODE
 #undef  MULTITHREADED_MODE
 
-#endif      // Header Guard
+#endif          // Header Guard
