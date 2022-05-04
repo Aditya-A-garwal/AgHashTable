@@ -26,7 +26,7 @@ find (int32_t pLo, int32_t pHi, int32_t pId = 0)
 {
     int32_t     res     {0};
 
-    for (int32_t i = 0; i < pHi; ++i) {
+    for (int32_t i = pLo; i < pHi; ++i) {
         res += (int32_t) table.find (i);
     }
 
@@ -36,7 +36,7 @@ find (int32_t pLo, int32_t pHi, int32_t pId = 0)
 }
 
 int
-main (int argc, char *argv[])
+main (void)
 {
 
     if (!table.initialized ()) {

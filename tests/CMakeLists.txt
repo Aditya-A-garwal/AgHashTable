@@ -19,13 +19,14 @@ macro (set_flags)
 
     message ("Setting flags for tests")
 
-    # all warnings (even extra) should be considered as errors
+    # clear out all flags which CMake sets by default based on the build mode
     set (CMAKE_CXX_FLAGS "")
     set (CMAKE_CXX_FLAGS_RELEASE "")
     set (CMAKE_CXX_FLAGS_DEBUG "")
     set (CMAKE_CXX_FLAGS_RELMINSIZE "")
     set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "")
 
+    # all warnings (even extra) should be considered as errors
     if (MSVC OR MSVC_IDE)
         target_compile_options (test PRIVATE "/W4" "/WX" "/EHsc")
     else ()

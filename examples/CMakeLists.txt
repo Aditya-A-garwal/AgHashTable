@@ -4,57 +4,53 @@ macro (set_flags)
 
     message ("Setting flags for examples")
 
+    # clear out all flags which CMake sets by default based on the build mode
     set (CMAKE_CXX_FLAGS "")
     set (CMAKE_CXX_FLAGS_RELEASE "")
     set (CMAKE_CXX_FLAGS_DEBUG "")
     set (CMAKE_CXX_FLAGS_RELMINSIZE "")
     set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "")
 
+    # all warnings (even extra) should be considered as errors
     if (MSVC OR MSVC_IDE)
-        target_compile_options (main PRIVATE "/W4" "/WX" "/EHsc")
+        target_compile_options (emails PRIVATE "/W4" "/WX" "/EHsc")
+        target_compile_options (concurrent_all PRIVATE "/W4" "/WX" "/EHsc")
+        target_compile_options (concurrent_read PRIVATE "/W4" "/WX" "/EHsc")
     else ()
-        target_compile_options (main PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
+        target_compile_options (emails PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
+        target_compile_options (concurrent_all PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
+        target_compile_options (concurrent_read PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
     endif ()
 
 endmacro ()
 
 add_executable (
-    main
-    main.cpp
+    emails
+    emails.cpp
 )
 
 target_link_libraries (
-    main
+    emails
     pthread
 )
 
 add_executable (
-    simple_concurrency_test
-    simple_concurrency_test.cpp
+    concurrent_all
+    concurrent_all.cpp
 )
 
 target_link_libraries (
-    simple_concurrency_test
+    concurrent_all
     pthread
 )
 
 add_executable (
-    multiread_test
-    multiread_test.cpp
+    concurrent_read
+    concurrent_read.cpp
 )
 
 target_link_libraries (
-    multiread_test
-    pthread
-)
-
-add_executable (
-    sparse_data
-    sparse_data.cpp
-)
-
-target_link_libraries (
-    sparse_data
+    concurrent_read
     pthread
 )
 

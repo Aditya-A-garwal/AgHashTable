@@ -16,10 +16,19 @@ if (NOT DEFINED BUILD_TESTS)
     set (BUILD_TESTS "on")
 endif ()
 
+if (NOT DEFINED BUILD_BENCHMARKS)
+    message ("No value given for BUILD_BENCHMARKS, assuming \"ON\"")
+    set (BUILD_BENCHMARKS "on")
+endif ()
+
 if (BUILD_EXAMPLES)
     add_subdirectory (${CMAKE_SOURCE_DIR}/examples ${CMAKE_SOURCE_DIR}/examples/build)
 endif ()
 
 if (BUILD_TESTS)
     add_subdirectory (${CMAKE_SOURCE_DIR}/tests ${CMAKE_SOURCE_DIR}/tests/build)
+endif ()
+
+if (BUILD_BENCHMARKS)
+    add_subdirectory (${CMAKE_SOURCE_DIR}/benchmarks ${CMAKE_SOURCE_DIR}/benchmarks/build)
 endif ()

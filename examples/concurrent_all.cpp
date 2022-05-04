@@ -13,10 +13,10 @@
 // mulithreading + table level locking - define TABLE_LOCK
 // mulithreading + bucket level locking - define BUCKET_LOCK
 
-// #define LINEAR
+#define LINEAR
 // #define NO_LOCK
 // #define TABLE_LOCK
-#define BUCKET_LOCK
+// #define BUCKET_LOCK
 
 #define AG_DBG_MODE
 #if defined (BUCKET_LOCK)
@@ -147,7 +147,7 @@ YesLock::Find ()
 
 
 int
-main (int argc, char *argv[])
+main (void)
 {
     if (!table.initialized ()) {
         std::cout << "Could not initialize table\n";
@@ -196,8 +196,3 @@ main (int argc, char *argv[])
 
     return 0;
 }
-
-// a reader thread should add the reader lock
-// a writer thread should add the writer lock
-// a reader thread only waits on a writer lock
-// a writer thread waits on both locks

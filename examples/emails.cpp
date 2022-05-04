@@ -1,52 +1,55 @@
 #include <iostream>
 #include <string>
+#include <cstring>
 
-#include <vector>
-
-#include <set>
-#include <unordered_set>
-
-#define AG_DBG_MODE
 #include "AgHashTable.h"
 
-void
-id_scramble (uint16_t &pVar)
-{
-    pVar    *= 0x1234;
-}
+class Hasher {
 
-uint16_t
-id (const uint8_t *pStr, const uint64_t pLen)
-{
-    uint16_t        res = 0;
+public:
 
-    for (uint64_t i = 0ULL; i < pLen / 2; ++i) {
-        res     = res ^ ((uint16_t *)pStr)[i];
-        // res     *= (1ULL << 10) + 0b1010;
-        id_scramble (res);
+    static void
+    init ()
+    {
+        for (uint16_t i = 0; i < (1 << 16); ++i) {
+            numbers[i] = i;
+        }
+
+        // randomly shuffle the array numbers...
     }
 
-    if (pLen & 1) {
-        res     = res ^ pStr[pLen - 1];
-        // res     *= (1ULL << 10) + 0b1010;
-        id_scramble (res);
+    static uint16_t
+    hash (const uint8_t *pPtr, const uint64_t pLen)
+    {
+        const char      *str    = (const char *) pPtr;
+        const uint64_t  len     = strlen (str);
+
+        uint16_t        res     = pLen;
+
+        for (uint16_t i = 0; i < len; ++i) {
+            res     = numbers[res ^ str[i]];
+        }
+
+        return res;
     }
 
-    return res;
+    static bool
+    equals (const char * const &pA, const char * const &pB) {
+        return strcmp (pA, pB) == 0;
+    }
 
-    // auto c = pStr[pLen - 1];
-    // ((uint8_t *)pStr)[pLen - 1] = c;
+private:
 
-    // return 1;
-}
+    static uint16_t numbers[1 << 16];
+};
+
+uint16_t Hasher::numbers[1 << 16];
 
 int
 main (void)
 {
-    // find two string which have the same hash
-
-    // AgHashTable<const char *>   table;
-    AgHashTable<const char *, id>  table;
+    Hasher::init ();
+    AgHashTable<const char *, Hasher::hash, Hasher::equals>  table;
 
     if (!table.initialized ()) {
         std::cout << "Failed to init table\n";
@@ -327,8 +330,7 @@ main (void)
         }
     }
 
-    std::cout << "Size of table: " << table.size () << std::endl;
-    std::cout << "Slots used: " << table.total_slots_used () << std::endl;
+    std::cout << "Number of keys in the table: " << table.size () << std::endl;
 
     return 0;
 }
