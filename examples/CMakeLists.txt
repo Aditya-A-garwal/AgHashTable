@@ -15,11 +15,11 @@ macro (set_flags)
     if (MSVC OR MSVC_IDE)
         target_compile_options (emails PRIVATE "/W4" "/WX" "/EHsc")
         target_compile_options (concurrent_all PRIVATE "/W4" "/WX" "/EHsc")
-        target_compile_options (concurrent_read PRIVATE "/W4" "/WX" "/EHsc")
+        target_compile_options (concurrent_all_threadpool PRIVATE "/W4" "/WX" "/EHsc")
     else ()
         target_compile_options (emails PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
         target_compile_options (concurrent_all PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
-        target_compile_options (concurrent_read PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
+        target_compile_options (concurrent_all_threadpool PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
     endif ()
 
 endmacro ()
@@ -45,12 +45,12 @@ target_link_libraries (
 )
 
 add_executable (
-    concurrent_read
-    concurrent_read.cpp
+    concurrent_all_threadpool
+    concurrent_all_threadpool.cpp
 )
 
 target_link_libraries (
-    concurrent_read
+    concurrent_all_threadpool
     pthread
 )
 

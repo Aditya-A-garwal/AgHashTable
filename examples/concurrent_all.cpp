@@ -1,3 +1,17 @@
+/**
+ * @file            concurrent_all.cpp
+ * @author          Aditya Agarwal (aditya.agarwal@dumblebots.com)
+ * @brief           Perform insert (modifier), erase (modifier) and find (non-modifier) operations simultaneously on the table.
+ *
+ *                  Simultaneously insert into, delete from and find keys in the table and report the results and the time taken.
+ *                  The operations can be performed sequentially (no multi-threading involved) or concurrently.
+ *                  If perfomed concurrently, the locking can be done at the table level or at the bucket level.
+ *                  The behaviour of the program can be changed by changing macro definitions after the include directives.
+ *
+ *                  In case operations are performed concurrently, each type of operation is performed on a seperate thread, rather
+ *                  than individual operations.
+ */
+
 #include <cstdio>
 #include <iostream>
 
@@ -25,10 +39,13 @@
 
 #include "AgHashTable.h"
 
-#define NUM_ELEMENTS        10'000'000
-#define ELEMENT_RANGE       1'000'000
 
 namespace   chrono = std::chrono;
+
+
+constexpr int32_t   NUM_ELEMENTS    = 10'000'000;       /** Number of keys to use per operation */
+constexpr int32_t   ELEMENT_RANGE   = 1'000'000;        /** Range of keys, includes 0, does not include ELEMENT_RANGE */
+
 
 AgHashTable<int32_t>    table;
 
@@ -41,7 +58,7 @@ private:
 
 public:
 
-    static uint64_t sCntr;
+    static uint64_t     sCntr;
 
     static void     Init ();
 
@@ -50,8 +67,8 @@ public:
     static void     Find ();
 };
 
-std::mt19937 NoLock::sGen;
-uint64_t NoLock::sCntr;
+std::mt19937    NoLock::sGen;
+uint64_t        NoLock::sCntr;
 
 void
 NoLock::Init ()
@@ -62,24 +79,24 @@ NoLock::Init ()
 void
 NoLock::Insert ()
 {
-    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
-        table.insert (NoLock::sGen () % (ELEMENT_RANGE));
+    for (int32_t i = 0; i < NUM_ELEMENTS; ++i) {
+        table.insert (NoLock::sGen () % ELEMENT_RANGE);
     }
 }
 
 void
 NoLock::Erase ()
 {
-    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
-        table.erase (NoLock::sGen () % (ELEMENT_RANGE));
+    for (int32_t i = 0; i < NUM_ELEMENTS; ++i) {
+        table.erase (NoLock::sGen () % ELEMENT_RANGE);
     }
 }
 
 void
 NoLock::Find ()
 {
-    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
-        NoLock::sCntr   += (uint64_t) table.find (NoLock::sGen () % (ELEMENT_RANGE));
+    for (int32_t i = 0; i < NUM_ELEMENTS; ++i) {
+        NoLock::sCntr   += (uint64_t) table.find (NoLock::sGen () % ELEMENT_RANGE);
     }
 
     std::cout << "NO LOCK: " << NoLock::sCntr << '\n';
@@ -116,9 +133,9 @@ YesLock::Init ()
 void
 YesLock::Insert ()
 {
-    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
+    for (int32_t i = 0; i < NUM_ELEMENTS; ++i) {
         sTableMutex.lock ();
-        table.insert (YesLock::sGen () % (ELEMENT_RANGE));
+        table.insert (YesLock::sGen () % ELEMENT_RANGE);
         sTableMutex.unlock ();
     }
 }
@@ -126,9 +143,9 @@ YesLock::Insert ()
 void
 YesLock::Erase ()
 {
-    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
+    for (int32_t i = 0; i < NUM_ELEMENTS; ++i) {
         sTableMutex.lock ();
-        table.erase (YesLock::sGen () % (ELEMENT_RANGE));
+        table.erase (YesLock::sGen () % ELEMENT_RANGE);
         sTableMutex.unlock ();
     }
 }
@@ -136,9 +153,9 @@ YesLock::Erase ()
 void
 YesLock::Find ()
 {
-    for (int32_t i = 0; i < (NUM_ELEMENTS); ++i) {
+    for (int32_t i = 0; i < NUM_ELEMENTS; ++i) {
         sTableMutex.lock ();
-        YesLock::sCntr   += (uint64_t) table.find (YesLock::sGen () % (ELEMENT_RANGE));
+        YesLock::sCntr   += (uint64_t) table.find (YesLock::sGen () % ELEMENT_RANGE);
         sTableMutex.unlock ();
     }
 
@@ -154,7 +171,10 @@ main (void)
         return 1;
     }
 
-    auto        start   = chrono::high_resolution_clock::now ();
+    chrono::high_resolution_clock::time_point   start;
+    chrono::high_resolution_clock::time_point   end;
+
+    start   = chrono::high_resolution_clock::now ();
 
 #if defined (LINEAR)
 
@@ -190,9 +210,13 @@ main (void)
 
 #endif
 
-    auto        end     = chrono::high_resolution_clock::now ();
+    end     = chrono::high_resolution_clock::now ();
 
     std::cout << "Time elapsed: " << (chrono::duration_cast<chrono::milliseconds>(end - start).count ()) << "us \n";
+#if defined (AG_DBG_MODE)
+    std::cout << "Allocations: " << table.getAllocCount () << '\n';
+    std::cout << "Allocation amount: " << table.getAllocAmount () << '\n';
+#endif
 
     return 0;
 }

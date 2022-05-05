@@ -1,55 +1,20 @@
+/**
+ * @file            emails.cpp
+ * @author          Aditya Agarwal (aditya.agarwal@dumblebots.com)
+ * @brief           Insert and emails (C-style strings) from a randomly generated array.
+ */
+
+#include <cstdio>
 #include <iostream>
-#include <string>
+
 #include <cstring>
 
 #include "AgHashTable.h"
 
-class Hasher {
-
-public:
-
-    static void
-    init ()
-    {
-        for (uint16_t i = 0; i < (1 << 16); ++i) {
-            numbers[i] = i;
-        }
-
-        // randomly shuffle the array numbers...
-    }
-
-    static uint16_t
-    hash (const uint8_t *pPtr, const uint64_t pLen)
-    {
-        const char      *str    = (const char *) pPtr;
-        const uint64_t  len     = strlen (str);
-
-        uint16_t        res     = pLen;
-
-        for (uint16_t i = 0; i < len; ++i) {
-            res     = numbers[res ^ str[i]];
-        }
-
-        return res;
-    }
-
-    static bool
-    equals (const char * const &pA, const char * const &pB) {
-        return strcmp (pA, pB) == 0;
-    }
-
-private:
-
-    static uint16_t numbers[1 << 16];
-};
-
-uint16_t Hasher::numbers[1 << 16];
-
 int
 main (void)
 {
-    Hasher::init ();
-    AgHashTable<const char *, Hasher::hash, Hasher::equals>  table;
+    AgHashTable<const char *>  table;
 
     if (!table.initialized ()) {
         std::cout << "Failed to init table\n";
