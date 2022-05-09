@@ -64,11 +64,11 @@ ag_hashtable_default_equals (const val_t &pA, const val_t &pB)
 }
 
 /**
- * @brief
+ * @brief                   AgAVLTree is an implementation of the AVL tree data structure (a type of self balanced binary search tree)
  *
- * @tparam key_t
- * @tparam tHashFunc
- * @tparam tEquals
+ * @tparam key_t            Type of keys held by the hash table
+ * @tparam tHashFunc        Hash function to use (defaults to 16 bit pearson hash)
+ * @tparam tEquals          Comparator to use while making equals comparisons (defaults to operator==)
  */
 template <typename key_t, auto tHashFunc = ag_pearson_16_hash, auto tEquals = ag_hashtable_default_equals<key_t>>
 class AgHashTable {
@@ -79,58 +79,58 @@ class AgHashTable {
 
 
 
-    using       hash_t          = typename std::invoke_result<decltype (tHashFunc), const uint8_t *, const uint64_t>::type;     /** */
+    using       hash_t          = typename std::invoke_result<decltype (tHashFunc), const uint8_t *, const uint64_t>::type;     /** Data type returned by the hash function (must be unsigned integral type */
     static_assert (std::is_unsigned<hash_t>::value, "Return type of hash functions must be unsigned integer");
 
     /**
-     * @brief
+     * @brief               Generic node in linked list which stores a key
      *
      */
     struct node_t {
 
-        node_t              *nextPtr;                               /** */
-        key_t               key;                                    /** */
+        node_t              *nextPtr;                               /** Pointer to the next node in the linked list */
+        key_t               key;                                    /** Key held by the node */
 
-        ~node_t () { delete nextPtr; }
+        ~node_t () { delete nextPtr; }                              /** The destructor recursively destroys all nodes in the linked list */
     };
 
     /**
-     * @brief
+     * @brief               Aggregate node representing a collection (linked list) of nodes containing keys which all have the same hash
      *
      */
     struct aggregate_node_t {
 
-        aggregate_node_t    *nextPtr;                               /** */
-        uint64_t            keyCount;                               /** */
-        hash_t              keyHash;                                /** */
-        node_t              *nodePtr;                               /** */
+        aggregate_node_t    *nextPtr;                               /** Pointer to the next aggregate node in the linked list */
+        uint64_t            keyCount;                               /** Number of nodes (which contain keys) in the aggregate node's linked list (all have the same hash) */
+        hash_t              keyHash;                                /** Common hash value of the keys which the aggregate node represents */
+        node_t              *nodePtr;                               /** Pointer to the linked list of nodes which this aggregate node respresents */
 
         ~aggregate_node_t () { delete nextPtr; delete nodePtr; }
     };
 
     /**
-     * @brief
+     * @brief               Bucket in the hash table, representing a collection of keys whose hash's have the same value modulo the number of buckets
      *
      */
     struct bucket_t {
 
-        uint64_t            keyCount            {0ULL};             /** */
-        uint64_t            distinctHashCount   {0ULL};             /** */
-        aggregate_node_t    *hashListHead       {nullptr};          /** */
+        uint64_t            keyCount            {0ULL};             /** Number of keys in the bucket */
+        uint64_t            distinctHashCount   {0ULL};             /** Number of distinct hashs in this bucket (= number of aggregate nodes in the bucket) */
+        aggregate_node_t    *hashListHead       {nullptr};          /** Pointer to the linked list of aggregate nodes */
     };
 
 
-    using       node_ptr_t      = node_t *;                                             /** */
-    using       aggr_ptr_t      = aggregate_node_t *;                                   /** */
-    using       bucket_ptr_t    = bucket_t *;                                           /** */
+    using       node_ptr_t      = node_t *;                                             /** Helper alias for pointers to linked list nodes */
+    using       aggr_ptr_t      = aggregate_node_t *;                                   /** Helper alias for pointers to linked list of aggregate nodes */
+    using       bucket_ptr_t    = bucket_t *;                                           /** Helper alias for pointers to buckets/arrays of buckets */
 
 
-    static constexpr uint64_t   sHashBitness            = sizeof (hash_t) * 8ULL;       /** */
-    static constexpr uint64_t   sNumDistinctAllowed     = 2ULL;                         /** */
-    static constexpr uint64_t   sNumKeysAllowed         = 16ULL;                        /** */
-    static constexpr uint64_t   sResizeFactor           = 8ULL;                         /** */
+    static constexpr uint64_t   sHashBitness            = sizeof (hash_t) * 8ULL;       /** Bitness of the return type of the hash function */
+    static constexpr uint64_t   sNumDistinctAllowed     = 2ULL;                         /** Number of distinct hashs allowed per bucket before resizing is considered */
+    static constexpr uint64_t   sNumKeysAllowed         = 16ULL;                        /** Number of keys allowed in a bucket before resizing is considered */
+    static constexpr uint64_t   sResizeFactor           = 8ULL;                         /** Factor by which the size of the hash table grows */
 
-    static constexpr uint64_t   sMaxBucketsAllowed      = 1ULL << 24;                   /** */
+    static constexpr uint64_t   sMaxBucketsAllowed      = 1ULL << 24;                   /** Maxmimum number of buckets allowed in the hash table */
 
 
 
