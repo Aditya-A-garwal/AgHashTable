@@ -42,14 +42,14 @@ main (void)
     // print the number of disctinct elements in the array (= size of tree = number of elements in tree)
     std::cout << "Contains " << table.size () << " distinct elements\n";
 
-    // // print each element of the array once by iterating over the tree
-    // std::cout << "Which are " << '{';
-    // it          = table.begin ();
-    // for (int i = 0; i < (int)table.size () - 1; ++i, ++it) {
-    //     std::cout << *it << ", ";
-    // }
-    // std::cout << *it << '}' << '\n';
-    // std::cout << '\n';
+    // print each element of the array once by iterating over the tree
+    std::cout << "Which are " << '{';
+    it          = table.begin ();
+    for (int i = 0; i < (int)table.size () - 1; ++i, ++it) {
+        std::cout << *it << ", ";
+    }
+    std::cout << *it << '}' << '\n';
+    std::cout << '\n';
 
     return 0;
 }

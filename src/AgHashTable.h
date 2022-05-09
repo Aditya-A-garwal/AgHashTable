@@ -39,7 +39,8 @@
 /**
  * @brief                   Default equals comparator to be used by AgHashTable for checking equivalance of keys
  *
- * Requires operator== to be overloaded for val_t
+ *                          Requires operator== to be overloaded for val_t
+ *                          If C style strings (val_t is char * or val_t is const char *), then strcmp is used (unsafe, better to overload using strncmp)
  *
  * @tparam val_t            Type of value to compare
  *
@@ -62,229 +63,269 @@ ag_hashtable_default_equals (const val_t &pA, const val_t &pB)
     }
 }
 
-
 /**
- * @brief                   AgHashtable is an implementation of the hashtable data structure
+ * @brief
  *
- * @tparam key_t            Type of keys held by the hashtable
- * @tparam mHashFunc        Hash Function for calculating the hashes of keys
+ * @tparam key_t
+ * @tparam tHashFunc
+ * @tparam tEquals
  */
-template <typename key_t, auto mHashFunc = ag_pearson_16_hash, auto mEquals = ag_hashtable_default_equals<key_t>>
+template <typename key_t, auto tHashFunc = ag_pearson_16_hash, auto tEquals = ag_hashtable_default_equals<key_t>>
 class AgHashTable {
 
 
 
-protected:
+    protected:
 
 
+
+    using       hash_t          = typename std::invoke_result<decltype (tHashFunc), const uint8_t *, const uint64_t>::type;     /** */
+    static_assert (std::is_unsigned<hash_t>::value, "Return type of hash functions must be unsigned integer");
 
     /**
-     * @brief               Node in the linked list at each position for storing keys
+     * @brief
      *
      */
     struct node_t {
 
-        node_t          *nextPtr;                       /** Pointer to the next node in the linked list */
-        key_t           key;                            /** Stores the key in node */
+        node_t              *nextPtr;                               /** */
+        key_t               key;                                    /** */
 
         ~node_t () { delete nextPtr; }
     };
 
+    /**
+     * @brief
+     *
+     */
+    struct aggregate_node_t {
+
+        aggregate_node_t    *nextPtr;                               /** */
+        uint64_t            keyCount;                               /** */
+        hash_t              keyHash;                                /** */
+        node_t              *nodePtr;                               /** */
+
+        ~aggregate_node_t () { delete nextPtr; delete nodePtr; }
+    };
 
     /**
-     * @brief               Bucket (for recursively holding more buckets, or linked list containing keys)
+     * @brief
      *
      */
     struct bucket_t {
 
-        /**
-         * Type to alias pointer to internal array of slots, which might be of linked lists or
-         * buckets recursively. In case of linked lists, is of node_list_ar_t and in case of buckets,
-         * is of bucket_array_t
-         */
-        using           slot_t  = void *;
-
-        // uint64_t        keyCount        {0ULL};         /** Number of keys in the bucket (at the lowest level) */
-        slot_t          slotArray       {nullptr};      /** Array of slots (for linked lists or buckets) */
+        uint64_t            keyCount            {0ULL};             /** */
+        uint64_t            distinctHashCount   {0ULL};             /** */
+        aggregate_node_t    *hashListHead       {nullptr};          /** */
     };
 
 
-    using       slot_t              = typename bucket_t::slot_t;
-
-    using       node_ptr_t          = node_t *;         /** Alias for node_t * for greater readability */
-    using       node_list_t         = node_t *;         /** Alias for node_t * for explicit linked list instantiation */
-    using       node_list_ar_t      = node_list_t *;    /** Alias for node_t ** for explicit instantiation of linked list arrays */
-
-    using       bucket_ptr_t        = bucket_t *;       /** Alias for bucket_t * for greater readability */
-    using       bucket_array_t      = bucket_t *;       /** Alias for bucket_t * for explicit instantiation of bucket arrays */
+    using       node_ptr_t      = node_t *;                                             /** */
+    using       aggr_ptr_t      = aggregate_node_t *;                                   /** */
+    using       bucket_ptr_t    = bucket_t *;                                           /** */
 
 
-    /**
-     * Type of integer returned by given hash function, must be unsigned
-     */
-    using       hash_t              = typename std::invoke_result<decltype (mHashFunc), const uint8_t *, const uint64_t>::type;
-    static_assert (std::is_unsigned<hash_t>::value, "Return type of hash function must be unsigned integer");
-
-
-    /** Bitness of the hash function being used */
-    static constexpr uint64_t   sHashBitness    = sizeof (hash_t) * 8ULL;
-    /** Number of slots in each bucket */
-    static constexpr uint64_t   sSlotCount      = 4ULL;
-    /** log2(sSlotCount) used while calculating the slot id at each level */
-    static constexpr uint64_t   sSlotCountLog   = 2ULL;
-    /** Bitmask to use for extracting slot ID from hash at each level */
-    static constexpr uint64_t   sBitMask        = (sSlotCountLog != 64) ? ((1ULL << sSlotCountLog) - 1ULL) : (0xffffffffffffffffULL);
-    static_assert ((1ULL << sSlotCountLog) == sSlotCount, "sSLotCount should be 2 raised to sSlotCountLog");
-
-
-    /** Number of levels of nesting for buckets (last level is contains linked lists) */
-    static constexpr uint64_t   sLvlCount       = (sHashBitness / sSlotCountLog) + (uint64_t)((sHashBitness % sSlotCountLog) != 0);
-
-
-    bucket_ptr_t            mBucket;                    /** Top level bucket (recursively holds more buckets or linked lists at each position) */
-
-    MULTITHREADED_MODE (
-    std::shared_mutex       *mLocks;                    /** Pointer to array storing the locks */
-    )
-
-    uint64_t                mKeyCount       {0ULL};     /** Number of keys present in the hashtable */
-
-    DBG_MODE (
-    uint64_t                mAllocCnt       {0ULL};     /** Total number of allocations performed */
-    uint64_t                mDeallocCnt     {0ULL};     /** Total number of frees performed */
-    uint64_t                mAllocAmt       {0ULL};     /** Total number of bytes allocated by the hashtable */
-    )
+    static constexpr uint64_t   sHashBitness            = sizeof (hash_t) * 8ULL;       /** */
+    static constexpr uint64_t   sNumDistinctAllowed     = 2ULL;                         /** */
+    static constexpr uint64_t   sNumKeysAllowed         = 16ULL;                        /** */
+    static constexpr uint64_t   sResizeFactor           = 8ULL;                         /** */
 
 
 
-public:
+    public:
 
 
+
+    struct iterator {
+
+        protected:
+
+        using table_ptr_t       = const AgHashTable<key_t, tHashFunc, tEquals> *;
+        using ref_t             = const key_t &;
+
+        node_ptr_t  mPtr        {nullptr};                                  /** Pointer to table node (nullptr if points to end()) */
+        aggr_ptr_t  mAggrPtr    {nullptr};                                  /** Pointer to the aggregate node (nullptri f points to end() */
+        table_ptr_t mTablePtr   {nullptr};                                  /** Pointer to table instance */
+
+        public:
+
+        iterator                (node_ptr_t pPtr, aggr_ptr_t pAggrPtr, table_ptr_t pTablePtr);
+        iterator                () = default;
+
+        iterator operator++     ();
+        iterator operator++     (int);
+
+        ref_t    operator*      () const;
+
+        bool     operator==     (const iterator & pOther) const;
+        bool     operator!=     (const iterator & pOther) const;
+
+    };
 
     //  Constructors
 
     AgHashTable     ();
-    AgHashTable     (const AgHashTable<key_t, mHashFunc, mEquals> &) = delete;
+    AgHashTable     (const uint64_t &pBucketCount);
+    AgHashTable     (const AgHashTable<key_t, tHashFunc, tEquals> &pOther) = delete;
+
+    void                init ();
 
     //  Destructors
 
     ~AgHashTable    ();
 
-    //  Sanity checking
-
-    bool            initialized         () const;
-
     //  Getters
 
-    bool            find                (const key_t pKey) const;
-    uint64_t        size                () const;
-    uint64_t        keyCount            () const;
+    bool                initialized     () const;
+
+    uint64_t            size            () const;
+    uint64_t            getKeyCount     () const;
+
+    uint64_t            getBucketCount  () const;
+
+    // Testing and debugging
 
     DBG_MODE (
-    uint64_t        getAllocAmount      () const;
-    uint64_t        getAllocCount       () const;
-    uint64_t        getFreeCount        () const;
+    uint64_t            getAllocAmount  () const;
+    uint64_t            getAllocCount   () const;
+    uint64_t            getDeleteCount  () const;
+
+    uint64_t            getResizeCount  () const;
     )
 
-    //  Setters/Modifiers
+    bool                find            (const key_t &pKey) const;
 
-    bool            insert              (const key_t pKey);
-    bool            erase               (const key_t pKey);
+    //  Modifiers
+
+    bool                insert          (const key_t &pKey);
+    bool                erase           (const key_t &pKey);
+
+    // Iterators and Iteration
+
+    iterator            begin           () const;
+    iterator            end             () const;
 
 
 
-private:
+    private:
 
 
 
     // Getters
 
-    template <uint64_t pLvl>
-    bool    find_util                   (const key_t &pKey, const hash_t &pKeyHash, const bucket_ptr_t pSlots) const;
+    bool        find_util       (const key_t &pKey, node_ptr_t pListElem) const;
 
-    //  Setters/Modifiers
+    // Modifiers
 
-    template <uint64_t pLvl>
-    bool    insert_util                 (const key_t &pKey, const hash_t &pKeyHash, bucket_ptr_t pSlots);
-    template <uint64_t pLvl>
-    bool    erase_util                  (const key_t &pKey, const hash_t &pKeyHash, bucket_ptr_t pSlots);
+    bool        insert_util     (const key_t &pKey, node_ptr_t *pListElem);
+    bool        erase_util      (const key_t &pKey, node_ptr_t *pListElem);
 
-    template <uint64_t pLvl>
-    void    delete_bucket_contents      (bucket_ptr_t pBucket);
+    bool        resize          (const uint64_t &pNumBuckets);
+
+    // Iterators
+
+    aggr_ptr_t  getHashAggr     (const hash_t &pKeyHash) const;
+
+
+    bucket_ptr_t        mBucketArray;
+
+    MULTITHREADED_MODE (
+    std::shared_mutex   *mLocks;
+    )
+
+    uint64_t            mKeyCount       {0ULL};
+    uint64_t            mBucketCount    {256ULL};
+
+    DBG_MODE (
+    uint64_t            mAllocAmt       {0ULL};
+    uint64_t            mAllocCnt       {0ULL};
+    uint64_t            mDeleteCnt      {0ULL};
+
+    uint64_t            mResizeCnt      {0ULL};
+    )
+
 };
 
 /**
- * @brief               Construct a new AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable object
+ * @brief Construct a new AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable object
  *
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
-AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable ()
+template <typename key_t, auto tHashFunc, auto tEquals>
+AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable ()
 {
+    init ();
+}
+
+template <typename key_t, auto tHashFunc, auto tEquals>
+AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable (const uint64_t &pBucketCount)
+{
+    mBucketCount        = pBucketCount;
+    init ();
+}
+
+template <typename key_t, auto tHashFunc, auto tEquals>
+void
+AgHashTable<key_t, tHashFunc, tEquals>::init ()
+{
+    mBucketArray        = new (std::nothrow) bucket_t[mBucketCount];
 
     DBG_MODE (
-    std::cout << "sizeof node_t:        " << sizeof (node_t) << std::endl;
-    std::cout << "sizeof bucket_t:      " << sizeof (bucket_t) << std::endl;
-
-    std::cout << "hash bitness:         " << sHashBitness << std::endl;
-    std::cout << "slots in bucket:      " << sSlotCount << std::endl;
-
-    std::cout << "levels in table:      " << sLvlCount << std::endl;
-    )
-
-    mBucket     = new (std::nothrow) bucket_t;
-
-    DBG_MODE (
-    ++mAllocCnt;
-    mAllocAmt   += sizeof (bucket_t);
-    if (mBucket == nullptr) {
-        std::cout << "Allocation of top level bucket failed while constructing\n";
+    if (mBucketArray == nullptr) {
+        std::cout << "Allocation of bucket array failed while constructing\n";
+    }
+    else {
+        ++mAllocCnt;
+        mAllocAmt       += sizeof (bucket_t) * mBucketCount;
     }
     )
 
     MULTITHREADED_MODE (
-    mLocks      = new (std::nothrow) std::shared_mutex[sSlotCount];
-    DBG_MODE (
-    ++mAllocCnt;
-    mAllocAmt   += sizeof (std::shared_mutex) * sSlotCount;
-    if (mLocks == nullptr) {
 
+    mLocks              = new (std::nothrow) std::shared_mutex[mBucketCount];
+
+    DBG_MODE (
+    if (mLocks == nullptr) {
         std::cout << "Allocation of locks failed while constructing\n";
+    }
+    else {
+        ++mAllocCnt;
+        mAllocAmt       += sizeof (std::shared_mutex) * mBucketCount;
     }
     )
     )
-}
-
-/**
- * @brief              Destroy the AgHashTable<key_t, mHashFunc, mEquals>::AgHashTable object
- *
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-AgHashTable<key_t, mHashFunc, mEquals>::~AgHashTable ()
-{
-    // delete the contents of the top level bucket and then the bucket itself
-    delete_bucket_contents<0> (mBucket);
-    delete mBucket;
 
     DBG_MODE (
-    ++mDeallocCnt;
-    mAllocAmt   -= sizeof (bucket_t);
-    mAllocAmt   -= sizeof (node_t) * mKeyCount;
+    std::cout << "sizeof node_t: " << sizeof (node_t) << std::endl;
+    std::cout << "sizeof aggregate_node_t: " << sizeof (aggregate_node_t) << std::endl;
+    std::cout << "sizeof bucket_t: " << sizeof (bucket_t) << std::endl;
     )
-
-    mKeyCount   = 0;
 }
 
 /**
- * @brief               Check if the hashtable could be successfuly initialized
+ * @brief Destroy the AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable object
  *
- * @return true         If the hash table could be successfuly initialized
- * @return false        If the hash table could not be successfuly initialized
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
-bool
-AgHashTable<key_t, mHashFunc, mEquals>::initialized () const
+template <typename key_t, auto tHashFunc, auto tEquals>
+AgHashTable<key_t, tHashFunc, tEquals>::~AgHashTable ()
 {
-    if (mBucket == nullptr) {
+    for (uint64_t bucketId = 0; bucketId < mBucketCount; ++bucketId) {
+        delete mBucketArray[bucketId].hashListHead;
+    }
+
+    delete mBucketArray;
+}
+
+/**
+ * @brief
+ *
+ * @return true
+ * @return false
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+bool
+AgHashTable<key_t, tHashFunc, tEquals>::initialized () const
+{
+    if (mBucketArray == nullptr) {
         return false;
     }
 
@@ -298,477 +339,528 @@ AgHashTable<key_t, mHashFunc, mEquals>::initialized () const
 }
 
 /**
- * @brief               Search for the supplied key in the hashtable
+ * @brief
  *
- * @param pKey          Key to search for
- *
- * @return true         If the supplied key is present in the table
- * @return false        If the supplied key is not present in the table
+ * @return uint64_t
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
-bool
-AgHashTable<key_t, mHashFunc, mEquals>::find (const key_t pKey) const
-{
-    bucket_array_t  bucketArray;                                    /** Array of buckets in the top level bucket (alias for slot array) */
-
-    hash_t          keyHash;                                        /** Hash value of the key */
-    uint64_t        slotId;                                         /** Position in the top level bucket in which to recursively search*/
-
-    keyHash         = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    slotId          = keyHash & sBitMask;
-
-    // lock the entire tree of buckets which are descendants of the corresponding top level bucket
-    MULTITHREADED_MODE (
-    std::shared_lock<std::shared_mutex> scopedLock (mLocks[slotId]);
-    )
-
-    // cast the array of slots into an array of buckets
-    bucketArray     = (bucket_array_t)(mBucket->slotArray);
-
-    // if the top level buckets have not been allocated, return false straight away
-    if (bucketArray == nullptr) {
-        return false;
-    }
-
-    return  find_util<1> (pKey, keyHash, (const bucket_ptr_t)(&(bucketArray[slotId])));
-}
-
-/**
- * @brief               Return the number of keys in the hastable (identical to keyCount())
- *
- * @return uint64_t     Number of keys in the table
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
+template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::size () const
+AgHashTable<key_t, tHashFunc, tEquals>::size () const
 {
     return mKeyCount;
 }
 
 /**
- * @brief               Return the number of keys in the hastable (identical to size())
+ * @brief
  *
- * @return uint64_t     Number of keys in the table
+ * @return uint64_t
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
+template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::keyCount () const
+AgHashTable<key_t, tHashFunc, tEquals>::getKeyCount () const
 {
     return mKeyCount;
+}
+
+/**
+ * @brief
+ *
+ * @return uint64_t
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+uint64_t
+AgHashTable<key_t, tHashFunc, tEquals>::getBucketCount () const
+{
+    return mBucketCount;
 }
 
 DBG_MODE (
+
 /**
- * @brief               Return the number of bytes allocated by the hashtable
+ * @brief
  *
- * @return uint64_t     Number of bytes allocated by the hashtable
+ * @return uint64_t
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
+template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::getAllocAmount () const
+AgHashTable<key_t, tHashFunc, tEquals>::getAllocAmount () const
 {
     return mAllocAmt;
 }
 
 /**
- * @brief               Return the number of times memory has been allocated by the hashtable
+ * @brief
  *
- * @return uint64_t     Number of bytes allocated by the hashtable
+ * @return uint64_t
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
+template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::getAllocCount () const
+AgHashTable<key_t, tHashFunc, tEquals>::getAllocCount () const
 {
     return mAllocCnt;
 }
 
 /**
- * @brief               Return the number of times memory has been freed by the hashtable
+ * @brief
  *
- * @return uint64_t     Number of bytes allocated by the hashtable
+ * @return uint64_t
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
+template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, mHashFunc, mEquals>::getFreeCount () const
+AgHashTable<key_t, tHashFunc, tEquals>::getDeleteCount () const
 {
-    return mDeallocCnt;
+    return mDeleteCnt;
 }
+
+/**
+ * @brief
+ *
+ * @return uint64_t
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+uint64_t
+AgHashTable <key_t, tHashFunc, tEquals>::getResizeCount () const
+{
+    return mResizeCnt;
+}
+
 )
 
 /**
- * @brief               Attempt to insert the supplied key in the hashtable
+ * @brief
  *
- * @param pKey          Key to insert
+ * @param pKey
  *
- * @return true         If the supplied key could be successfuly inserted
- * @return false        If the supplied key could not be successfuly inserted (allocation failed at some step or duplicate found)
+ * @return true
+ * @return false
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
+template <typename key_t, auto tHashFunc, auto tEquals>
 bool
-AgHashTable<key_t, mHashFunc, mEquals>::insert (const key_t pKey)
+AgHashTable<key_t, tHashFunc, tEquals>::find (const key_t &pKey) const
 {
-    hash_t          keyHash;                                        /** Array of buckets in the top level bucket (alias for slot array) */
-    uint64_t        slotId;                                         /** Hash value of the key */
+    hash_t              keyHash;                                    /** Hash value of the key */
+    uint64_t            bucketId;                                   /** Position of the bucket in which to insert the key */
 
-    bucket_array_t  bucketArray;                                    /** Position in the top level bucket in which to recursively search*/
+    aggr_ptr_t          aggrElem;                                   /** Pointer to the new aggregate node's predecessor's next-pointer */
 
-    keyHash     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    slotId      = keyHash & sBitMask;
+    // calculate the hash value of the key and find the bucket in which it should be insert into
+    keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+    bucketId        = keyHash & (mBucketCount - 1);
 
-    // lock the entire tree of buckets which are descendants of the corresponding top level bucket
-    MULTITHREADED_MODE (
-    std::lock_guard<std::shared_mutex> scopedLock (mLocks[slotId]);
-    )
+    // get a pointer to the pointer to the aggregate list's head
+    aggrElem        = mBucketArray[bucketId].hashListHead;
 
-    // cast the array of slots into an array of buckets
-    bucketArray     = (bucket_array_t)(mBucket->slotArray);
+    while (aggrElem != nullptr) {
 
-    // attempt to allocate the array of buckets (if not already)
-    if (bucketArray == nullptr) {
+        // if an aggregate node's representative hash value matches with the key's hash value.
+        // try to find the new key in it's linked list
+        if (aggrElem->keyHash == keyHash) {
+            return find_util (pKey, aggrElem->nodePtr);
+        }
 
-        bucketArray         = new (std::nothrow) bucket_t[sSlotCount];
+        // go to the next aggregate node
+        aggrElem    = aggrElem->nextPtr;
+    }
+
+    // if node aggregate node with matching representative hash value is found, return failed find
+    return false;
+}
+
+/**
+ * @brief
+ *
+ * @param pKey
+ *
+ * @return true
+ * @return false
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+bool
+AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
+{
+    hash_t              keyHash;                                    /** Hash value of the key */
+    uint64_t            bucketId;                                   /** Position of the bucket in which to insert the key */
+
+    aggr_ptr_t          *aggrElem;                                  /** Pointer to the new aggregate node's predecessor's next-pointer */
+    aggr_ptr_t          newAggr;                                    /** Pointer to new aggregate node */
+
+    bool                insertionState;                             /** */
+
+    // calculate the hash value of the key and find the bucket in which it should be insert into
+    keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+    bucketId        = keyHash & (mBucketCount - 1);
+
+    // get a pointer to the pointer to the aggregate list's head
+    aggrElem        = &(mBucketArray[bucketId].hashListHead);
+
+    while ((*aggrElem) != nullptr) {
+
+        // if the current aggregate node's representative hash value matches with the key's hash value,
+        // try to insert the new key into it's linked list
+        if ((*aggrElem)->keyHash == keyHash) {
+            insertionState  = insert_util (pKey, &((*aggrElem)->nodePtr));
+
+            if (insertionState) {
+                ++mKeyCount;
+                ++(*aggrElem)->keyCount;
+                if ((mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed) && (++mBucketArray[bucketId].keyCount > sNumKeysAllowed)) {
+                    resize (mBucketCount * sResizeFactor);
+                }
+            }
+
+            return insertionState;
+        }
+
+        // go to the next aggregate node
+        aggrElem    = &((*aggrElem)->nextPtr);
+    }
+
+    // if the loop was completed but no position was found, an entirely new aggregate node needs to be created for
+    // this hash value
+
+    // create a new aggregate node (return failed insertion on failure)
+    newAggr         = new (std::nothrow) aggregate_node_t {nullptr, 0ULL, keyHash, nullptr};
+    if (newAggr == nullptr) {
+        return false;
+    }
+    else {
         DBG_MODE (
         ++mAllocCnt;
-        mAllocAmt           += sizeof (bucket_t) * sSlotCount;
+        mAllocAmt   += sizeof (aggregate_node_t);
         )
-        mBucket->slotArray  = (slot_t)(bucketArray);
-
-        // if allocation fails, return false
-        if (bucketArray == nullptr) {
-            return false;
-        }
     }
 
-    return  insert_util<1> (pKey, keyHash, &(bucketArray[slotId]));
-}
+    // place the new node at the last position and try to insert the new key into it's linked list
+    (*aggrElem)     = newAggr;
 
-/**
- * @brief               Attempt to erase the supplied key from the hashtable
- *
- * @param pKey          Key to erase
- *
- * @return true         If the supplied key could be successfuly erased
- * @return false        If the supplied key could not be successfuly erased (no matching key found)
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-bool
-AgHashTable<key_t, mHashFunc, mEquals>::erase (const key_t pKey)
-{
-    bucket_array_t  bucketArray;                                    /** Array of buckets in the top level bucket (alias for slot array) */
+    insertionState  = insert_util (pKey, &((*aggrElem)->nodePtr));
 
-    hash_t          keyHash;                                        /** Hash value of the key */
-    uint64_t        slotId;                                         /** Position in the top level bucket in which to recursively search*/
-
-    keyHash     = mHashFunc ((uint8_t *)&pKey, sizeof (key_t));
-    slotId      = keyHash & sBitMask;
-
-    // lock the entire tree of buckets which are descendants of the corresponding top level bucket
-    MULTITHREADED_MODE (
-    std::lock_guard<std::shared_mutex> scopedLock (mLocks[slotId]);
-    )
-
-    // cast the array of slots into an array of buckets
-    bucketArray     = (bucket_array_t)(mBucket->slotArray);
-
-    // if the top level buckets have not been allocated yet, return false straight away
-    if (bucketArray == nullptr) {
-        return false;
-    }
-
-    return  erase_util<1> (pKey, keyHash, &(bucketArray[slotId]));
-}
-
-/**
- * @brief               Utility method that implements main search algorithm
- *
- * @tparam pLvl         Level at which the supplied bucket lies in
- *
- * @param pKey          Constant reference to key being searched for
- * @param pKeyHash      Hash value of the supplied key
- * @param pBucket       Pointer to the bucket being searched in (must be allocated, i.e. cannot be null)
- *
- * @return true         If the recursive search was succesful (matching key was found)
- * @return false        If the recursive search failed (matching key could not be found)
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-template <uint64_t pLvl>
-bool
-AgHashTable<key_t, mHashFunc, mEquals>::find_util (const key_t &pKey, const hash_t &pKeyHash, const bucket_ptr_t pBucket) const
-{
-    uint64_t    slotId;
-
-    slotId      = (pKeyHash >> (pLvl * sSlotCountLog)) & (sBitMask);
-
-    // if the slots in the bucket have not been init yet, the key obviously does not exist
-    if (pBucket->slotArray == nullptr) {
-        return false;
-    }
-
-    // not reached bottom layer (current layer contains buckets)
-    if constexpr (pLvl != (sLvlCount - 1)) {
-
-        // cast the array of generic slots to an array of buckets and get the pointer to the bucket
-        // at a specific position, recursively calling the search until the final level has been reached
-        return find_util<pLvl + 1> (pKey, pKeyHash, &(((bucket_ptr_t)(pBucket->slotArray))[slotId]));
-    }
-    // reached bottom layer (current layer contains linked lists)
-    else {
-        node_list_ar_t  slotArray;                          /** Array of linked lists in the current bucket */
-        node_ptr_t      listElem;                           /** Variable for iterating over each element */
-
-        // get the array as an array of linked lists (from an array of slots) and get the head
-        slotArray   = (node_list_t *)(pBucket->slotArray);
-        listElem    = slotArray[slotId];
-
-        // iterate through the linked list, trying to find a matching key
-        while (listElem != nullptr) {
-
-            // if a matching key is found, return true to indicate successful search
-            if (mEquals (listElem->key, pKey)) {
-                return true;
-            }
-
-            listElem    = listElem->nextPtr;
-        }
-
-        return false;
-    }
-}
-
-/**
- * @brief               Utility method that implements the main insert algorithm
- *
- * @tparam pLvl         Level at which the supplied bucket lies in
- *
- * @param pKey          Constant reference to the key being inserted
- * @param pKeyHash      Hash value of the supplied key
- * @param pBucket       Pointer to the bucket being recursively inserted in (must be allocated, i.e. cannot be null)
- *
- * @return true         If the recursive insertion was successful (no matching key)
- * @return false        If the recursive insertion failed (matching key found or allocation failed)
- */
-template <typename key_t, auto mHashFunc, auto mEquals>
-template <uint64_t pLvl>
-bool
-AgHashTable<key_t, mHashFunc, mEquals>::insert_util (const key_t &pKey, const hash_t &pKeyHash, bucket_ptr_t pBucket)
-{
-    uint64_t    slotId;
-
-    slotId      = (pKeyHash >> (pLvl * sSlotCountLog)) & (sBitMask);
-
-    // not reached bottom layer (current layer contains buckets)
-    if constexpr (pLvl != (sLvlCount - 1)) {
-
-        bucket_array_t  bucketArray;                            /** Array of buckets withing the current bucket */
-
-        // cast the array of slots into an array of buckets
-        bucketArray     = (bucket_array_t)(pBucket->slotArray);
-
-        // if the slot has not been init yet, try to init and return false on failure
-        if (pBucket->slotArray == nullptr) {
-
-            bucketArray         = new (std::nothrow) bucket_t[sSlotCount];
-            DBG_MODE (
-            ++mAllocCnt;
-            mAllocAmt           += sizeof (bucket_t) * sSlotCount;
-            )
-            pBucket->slotArray  = (slot_t)(bucketArray);
-            if (bucketArray == nullptr) {
-                return false;
-            }
-        }
-
-        // try to recursively insert, and increment current bucket's key count if successful
-        if (insert_util<pLvl + 1> (pKey, pKeyHash, &(bucketArray[slotId]))) {
-
-            // ++(pBucket->keyCount);
-            return true;
-        }
-
-        // if recursive insertion failed, return false to indicate failure
-        return false;
-    }
-    // reached bottom layer (current layer contains linked lists)
-    else {
-
-        node_list_ar_t  listArray;                              /** Array of linked lists in the current bucket */
-        node_ptr_t      *listElem;                              /** Pointer to each element's predecessor;s nextPtr, removed head special case */
-        node_ptr_t      newKey;                                 /** New node to be inserted into the linked list */
-
-        // cast the bucket's array of slots into an array of linked lists
-        listArray       = (node_list_ar_t)(pBucket->slotArray);
-
-        // if the slot has not been init yet, try to init and return false on failure
-        if (pBucket->slotArray == nullptr) {
-
-            listArray           = new (std::nothrow) node_list_t[sSlotCount];
-            DBG_MODE (
-            ++mAllocCnt;
-            mAllocAmt           += sizeof (node_list_t) * sSlotCount;
-            )
-            pBucket->slotArray  = (slot_t)(listArray);
-            if (listArray == nullptr) {
-                return false;
-            }
-
-            // zero out the entire array
-            for (uint64_t slot = 0; slot < sSlotCount; ++slot) {
-                listArray[slot]     = nullptr;
-            }
-        }
-
-        newKey          = new (std::nothrow) node_t {nullptr, pKey};
-        DBG_MODE (
-        ++mAllocCnt;
-        mAllocAmt       += sizeof (node_t);
-        )
-        listElem        = &(listArray[slotId]);
-
-        // go the end of the linked list, while making sure no duplicate key exists
-        while ((*listElem) != nullptr) {
-
-            // if a duplicate key is found, then return false to indicate failed insertion
-            if (mEquals ((*listElem)->key, pKey)) {
-                return false;
-            }
-
-            listElem    = &((*listElem)->nextPtr);
-        }
-
-        (*listElem)     = newKey;
-        // ++(pBucket->keyCount);
+    if (insertionState) {
         ++mKeyCount;
-
-        return true;
+        ++(*aggrElem)->keyCount;
+        if ((++mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed) && (++mBucketArray[bucketId].keyCount > sNumKeysAllowed)) {
+            resize (mBucketCount * sResizeFactor);
+        }
     }
+
+    return insertionState;
 }
 
 /**
- * @brief               Utility method that implements the main erase algorithm
+ * @brief
  *
- * @tparam pLvl         Level at which the supplied bucket lies in
+ * @param pKey
  *
- * @param pKey          Constant reference to the key being erased
- * @param pKeyHash      Hash value of the supplied key
- * @param pSlots        Pointer to the bucket being recursively erased from (must be allocated, i.e. cannot be null)
- *
- * @return true         If the deletion was successful (matching key was found)
- * @return false        If the deletion failed (no matching key)
+ * @return true
+ * @return false
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
-template <uint64_t pLvl>
+template <typename key_t, auto tHashFunc, auto tEquals>
 bool
-AgHashTable<key_t, mHashFunc, mEquals>::erase_util (const key_t &pKey, const hash_t &pKeyHash, bucket_ptr_t pBucket)
+AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
 {
-    uint64_t    slotId;
+    hash_t              keyHash;                                    /** Hash value of the key */
+    uint64_t            bucketId;                                   /** Position of the bucket in which to insert the key */
 
-    slotId      = (pKeyHash >> (pLvl * sSlotCountLog)) & (sBitMask);
+    aggr_ptr_t          *aggrElem;                                  /** Pointer to the new aggregate node's predecessor's next-pointer */
 
-    if constexpr (pLvl != (sLvlCount - 1)) {
+    bool                eraseState;                                 /** */
 
-        // if the slot has not been init yet, the key obviously does not exist, return false
-        if (pBucket->slotArray == nullptr) {
-            return false;
+    // calculate the hash value of the key and find the bucket in which it should be insert into
+    keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+    bucketId        = keyHash & (mBucketCount - 1);
+
+    // get a pointer to the pointer to the aggregate list's head
+    aggrElem        = &(mBucketArray[bucketId].hashListHead);
+
+    while ((*aggrElem) != nullptr) {
+
+        // if the current aggregate node's representative hash value matches with the key's hash value,
+        // try to insert the new key into it's linked list
+        if ((*aggrElem)->keyHash == keyHash) {
+            eraseState  = erase_util (pKey, &((*aggrElem)->nodePtr));
+            if (eraseState) {
+                --mKeyCount;
+                --(*aggrElem)->keyCount;
+                --mBucketArray[bucketId].keyCount;
+            }
+            return eraseState;
         }
 
-        // try to recursively erase, and decrement current bucket's key count if successful
-        if (erase_util<pLvl + 1> (pKey, pKeyHash, &(((bucket_ptr_t)(pBucket->slotArray))[slotId]))) {
-            // --(pBucket->keyCount);
+        // go to the next aggregate node
+        aggrElem    = &((*aggrElem)->nextPtr);
+    }
+
+    // if the loop was completed, but no aggregate node with matching representative hash value could be found,
+    // return failed erase
+
+    return false;
+}
+
+/**
+ * @brief
+ *
+ * @param pKey
+ * @param pListElem
+ *
+ * @return true
+ * @return false
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+bool
+AgHashTable<key_t, tHashFunc, tEquals>::find_util (const key_t &pKey, node_ptr_t pListElem) const
+{
+    while (pListElem != nullptr) {
+
+        // if a matching key has been found, return successful find
+        if (tEquals (pKey, pListElem->key)) {
             return true;
         }
 
-        // if recursive deletion failed, return false to indicate failure
-        return false;
+        pListElem   = pListElem->nextPtr;
     }
-    else {
 
-        node_ptr_t  *listElem;
-        node_ptr_t  resultant;
-
-        // if the slot has not been init yet, the key obviously does not exist, return false
-        if (pBucket->slotArray == nullptr) {
-            return false;
-        }
-
-        listElem    = &(((node_list_t *)(pBucket->slotArray))[slotId]);
-
-        // iterate over the linked list, trying to find a matching node
-        while ((*listElem) != nullptr) {
-
-            // if a duplicate key is found, then return true to indicate successful deletion
-            if (mEquals ((*listElem)->key, pKey)) {
-
-                resultant           = *listElem;
-                (*listElem)         = (*listElem)->nextPtr;
-                resultant->nextPtr  = nullptr;
-
-                delete resultant;
-                DBG_MODE (
-                ++mDeallocCnt;
-                mAllocAmt           -= sizeof (node_t);
-                )
-
-                // --(pBucket->keyCount);
-                --mKeyCount;
-
-                return true;
-            }
-            listElem        = &((*listElem)->nextPtr);
-        }
-
-        return false;
-    }
+    // if no duplicate key could be found, return failed find
+    return false;
 }
 
 /**
- * @brief               Utility method to recursively delete a bucket's contents
+ * @brief
  *
- * @tparam pLvl         The level at which the supplied bucket lies
+ * @param pKey
+ * @param pKeyHash
+ * @param pListElem
  *
- * @param pBucket       Pointer to the bucket whose contents are to be deleted
+ * @return true
+ * @return false
  */
-template <typename key_t, auto mHashFunc, auto mEquals>
-template <uint64_t pLvl>
-void
-AgHashTable<key_t, mHashFunc, mEquals>::delete_bucket_contents (bucket_ptr_t pBucket)
+template <typename key_t, auto tHashFunc, auto tEquals>
+bool
+AgHashTable<key_t, tHashFunc, tEquals>::insert_util (const key_t &pKey, node_ptr_t *pListElem)
 {
-    if (pBucket->slotArray == nullptr) {
-        return;
-    }
+    node_ptr_t          newNode;                                    /** Pointer to new node */
 
-    if constexpr (pLvl != (sLvlCount - 1)) {
+    while ((*pListElem) != nullptr) {
 
-        bucket_ptr_t    bucketArray;
-
-        bucketArray     = (bucket_ptr_t)(pBucket->slotArray);
-
-        for (uint64_t slot = 0; slot < sSlotCount; ++slot) {
-            delete_bucket_contents<pLvl + 1> (&(bucketArray[slot]));
+        // if a duplicate key is found to already exist, return failed insertion
+        if (tEquals (pKey, (*pListElem)->key)) {
+            return false;
         }
 
-        delete[] bucketArray;
-        DBG_MODE (
-        ++mDeallocCnt;
-        mAllocAmt       -= sizeof (bucket_t) * sSlotCount;
-        )
+        // go to the next node
+        pListElem       = &((*pListElem)->nextPtr);
+    }
+
+    // if the loop finished executing, no duplicate key exists, so try to insert this
+    // try to create a new node (return failed insertion on failure)
+    newNode         = new (std::nothrow) node_t {nullptr, pKey};
+    if (newNode == nullptr) {
+        return false;
     }
     else {
-
-        node_list_t     *listArray;
-
-        listArray       = (node_list_t *)(pBucket->slotArray);
-
-        for (uint64_t slot = 0; slot < sSlotCount; ++slot) {
-            delete listArray[slot];
-        }
-
-        delete[] listArray;
         DBG_MODE (
-        ++mDeallocCnt;
-        mAllocAmt       -= sizeof (node_list_t) * sSlotCount;
+        ++mAllocCnt;
+        mAllocAmt   += sizeof (node_t);
         )
     }
+
+    // place the new node at the vacant position
+    (*pListElem)    = newNode;
+
+    return true;
 }
+
+/**
+ * @brief
+ *
+ * @param pKey
+ * @param pKeyHash
+ * @param pListElem
+ *
+ * @return true
+ * @return false
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+bool
+AgHashTable<key_t, tHashFunc, tEquals>::erase_util (const key_t &pKey, node_ptr_t *pListElem)
+{
+    node_ptr_t          foundNode;                                  /** Pointer to node with matching key */
+
+    while ((*pListElem) != nullptr) {
+
+        // if a node is found with matching key, erase it
+        if (tEquals (pKey, (*pListElem)->key)) {
+
+            // take the current node out and set it's predecessor's successor to it's successor
+            foundNode           = *pListElem;
+            *pListElem          = foundNode->nextPtr;
+
+            // set it's successor to nullptr and delete it
+            foundNode->nextPtr  = nullptr;
+
+            delete foundNode;
+
+            DBG_MODE (
+            ++mDeleteCnt;
+            mAllocAmt           -= sizeof (node_t);
+            )
+
+            return true;
+        }
+
+        // go to the next node
+        pListElem   = &((*pListElem)->nextPtr);
+    }
+
+    return true;
+}
+
+/**
+ * @brief
+ *
+ * @param pNumBuckets
+ *
+ * @return true
+ * @return false
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+bool
+AgHashTable<key_t, tHashFunc, tEquals>::resize (const uint64_t &pNumBuckets)
+{
+    bucket_ptr_t        newArray;
+    aggr_ptr_t          *aggrElem;
+    aggr_ptr_t          *aggrInsertElem;
+
+    uint64_t            newPosition;
+
+    DBG_MODE (
+    ++mResizeCnt;
+    )
+
+    newArray        = new (std::nothrow) bucket_t[pNumBuckets];
+    if (newArray == nullptr) {
+        DBG_MODE (
+        std::cout << "Allocation of new bucket array failed while resizing" << std::endl;
+        std::cout << "Present Size: " << mBucketCount << std::endl;
+        std::cout << "Target Size: " << pNumBuckets << std::endl;
+        )
+
+        return false;
+    }
+    else {
+        DBG_MODE (
+        ++mAllocCnt;
+        mAllocAmt       += sizeof (bucket_t) * pNumBuckets;
+        )
+    }
+
+    for (uint64_t bucketId = 0ULL; bucketId < mBucketCount; ++bucketId) {
+
+        aggrInsertElem  = &(mBucketArray[bucketId].hashListHead);
+
+        while (*aggrInsertElem != nullptr) {
+
+            newPosition                     = (*aggrInsertElem)->keyHash & (pNumBuckets - 1);
+            aggrElem                        = &(newArray[newPosition].hashListHead);
+
+            while (*aggrElem != nullptr) {
+                aggrElem    = &((*aggrElem)->nextPtr);
+            }
+
+            *aggrElem                       = *aggrInsertElem;
+            ++newArray[newPosition].distinctHashCount;
+            newArray[newPosition].keyCount  += (*aggrElem)->keyCount;
+
+            *aggrInsertElem                 = (*aggrInsertElem)->nextPtr;
+            (*aggrElem)->nextPtr            = nullptr;
+        }
+    }
+
+    delete mBucketArray;
+    DBG_MODE (
+    ++mDeleteCnt;
+    mAllocAmt       -= sizeof (bucket_t) * mBucketCount;
+    )
+
+    mBucketArray    = newArray;
+    mBucketCount    = pNumBuckets;
+
+    return true;
+}
+
+/**
+ * @brief
+ *
+ * @param pKeyHash
+ *
+ * @return aggr_ptr_t
+ */
+template<typename key_t, auto tHashFunc, auto tEquals>
+typename AgHashTable<key_t, tHashFunc, tEquals>::aggr_ptr_t
+AgHashTable<key_t, tHashFunc, tEquals>::getHashAggr (const hash_t &pKeyHash) const
+{
+    uint64_t        bucketId;
+    aggr_ptr_t      aggrElem;
+
+    bucketId        = pKeyHash & (mBucketCount - 1);
+    aggrElem        = mBucketArray[bucketId].hashListHead;
+
+    while (aggrElem != nullptr) {
+        if (aggrElem->keyHash == pKeyHash) {
+            break;
+        }
+        aggrElem    = aggrElem->nextPtr;
+    }
+
+    return aggrElem;
+}
+
+/**
+ * @brief
+ *
+ * @return AgHashTable<key_t, tHashFunc, tEquals>::iterator
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+typename AgHashTable<key_t, tHashFunc, tEquals>::iterator
+AgHashTable<key_t, tHashFunc, tEquals>::begin () const
+{
+    aggr_ptr_t  newAggrPtr;
+    hash_t      newHash;
+
+    if (mKeyCount == 0) {
+        return end ();
+    }
+
+    newHash     = 0;
+
+    while (true) {
+
+        newAggrPtr  = getHashAggr (newHash);
+
+        if (newAggrPtr != nullptr) {
+            break;
+        }
+
+        if (++newHash == 0 || mKeyCount == 0) {
+            return end ();
+        }
+    }
+
+    return iterator {newAggrPtr->nodePtr, newAggrPtr, this};
+}
+
+/**
+ * @brief
+ *
+ * @return AgHashTable<key_t, tHashFunc, tEquals>::iterator
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+typename AgHashTable<key_t, tHashFunc, tEquals>::iterator
+AgHashTable<key_t, tHashFunc, tEquals>::end () const
+{
+    return iterator {nullptr, nullptr, this};
+}
+
+#include "AgHashTable_iter.h"
 
 #undef  DBG_MODE
 #undef  NO_DBG_MODE

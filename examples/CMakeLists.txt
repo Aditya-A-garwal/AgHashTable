@@ -17,13 +17,13 @@ macro (set_flags)
         target_compile_options (concurrent_all PRIVATE "/W4" "/WX" "/EHsc")
         target_compile_options (concurrent_all_threadpool PRIVATE "/W4" "/WX" "/EHsc")
         target_compile_options (array_distinct PRIVATE "/W4" "/WX" "/EHsc")
-        # target_compile_options (array_frequency PRIVATE "/W4" "/WX" "/EHsc")
+        target_compile_options (array_frequency PRIVATE "/W4" "/WX" "/EHsc")
     else ()
         target_compile_options (emails PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
         target_compile_options (concurrent_all PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
         target_compile_options (concurrent_all_threadpool PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
         target_compile_options (array_distinct PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
-        # target_compile_options (array_frequency PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
+        target_compile_options (array_frequency PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors")
     endif ()
 
 endmacro ()
@@ -68,14 +68,14 @@ target_link_libraries (
     pthread
 )
 
-# add_executable (
-#     array_frequency
-#     array_frequency.cpp
-# )
+add_executable (
+    array_frequency
+    array_frequency.cpp
+)
 
-# target_link_libraries (
-#     array_frequency
-#     pthread
-# )
+target_link_libraries (
+    array_frequency
+    pthread
+)
 
 set_flags ()
