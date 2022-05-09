@@ -16,10 +16,12 @@ macro (set_flags)
     # additionally, optimize completely for speed
     if (MSVC OR MSVC_IDE)
         target_compile_options (single_threaded PRIVATE "/W4" "/WX" "/EHsc" "/Ox")
+        # target_compile_options (multi_threaded PRIVATE "/W4" "/WX" "/EHsc" "/Ox")
         target_compile_options (random_gen PRIVATE "/W4" "/WX" "/EHsc" "/Ox")
         target_compile_options (sequence_gen PRIVATE "/W4" "/WX" "/EHsc" "/Ox")
     else ()
         target_compile_options (single_threaded PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors" "-O3")
+        # target_compile_options (multi_threaded PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors" "-O3")
         target_compile_options (random_gen PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors" "-O3")
         target_compile_options (sequence_gen PRIVATE "-Wall" "-Wextra" "-Werror" "-pedantic-errors" "-O3")
     endif ()
@@ -38,6 +40,16 @@ add_executable (
     single_threaded
     single_threaded.cpp
 )
+
+# add_executable (
+#     multi_threaded
+#     multi_threaded.cpp
+# )
+
+# target_link_libraries (
+#     multi_threaded
+#     pthread
+# )
 
 add_executable (
     random_gen

@@ -1,14 +1,14 @@
 /**
- * @file                benchmark.cpp
+ * @file                single_threaded.cpp
  * @author              Aditya Agarwal (aditya.agarwal@dumblebots.com)
  * @brief               Program to run benchmarks
  *
- * Usage: ./benchmark <input_file> <oper1 [oper2...]>
+ * Usage: ./single_threaded <input_file> <oper1 [oper2...]>
  *
  * input_file:     Path to file containing records
  * oper:           Number of operations of each type to perform
  *
- * Example: ./benchmark ../random_all.in 50000 1000000
+ * Example: ./single_threaded ../random_all.in 50000 1000000
  */
 
 // file and std IO

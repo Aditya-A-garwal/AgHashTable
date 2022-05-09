@@ -29,6 +29,7 @@
 
 #include <mutex>
 #include <shared_mutex>
+#include <atomic>
 
 #include <type_traits>
 #include <limits>

@@ -297,5 +297,9 @@ main (void)
 
     std::cout << "Number of keys in the table: " << table.size () << std::endl;
 
+    // for (auto &email : table) {
+    //     std::cout << email << std::endl;
+    // }
+
     return 0;
 }
