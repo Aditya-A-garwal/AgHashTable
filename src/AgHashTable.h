@@ -176,34 +176,38 @@ class AgHashTable {
 
     //  Getters
 
-    bool                initialized     () const;
+    bool                initialized         () const;
 
-    uint64_t            size            () const;
-    uint64_t            getKeyCount     () const;
+    uint64_t            size                () const;
+    uint64_t            getKeyCount         () const;
 
-    uint64_t            getBucketCount  () const;
+    uint64_t            getBucketCount      () const;
+    uint64_t            getMaxBucketCount   () const;
+
+    uint64_t            getBucketKeyCount   (const uint64_t &pBucketId) const;
+    uint64_t            getBucketHashCount  (const uint64_t &pBucketId) const;
 
     // Testing and debugging
 
     DBG_MODE (
-    uint64_t            getAllocAmount  () const;
-    uint64_t            getAllocCount   () const;
-    uint64_t            getDeleteCount  () const;
+    uint64_t            getAllocAmount      () const;
+    uint64_t            getAllocCount       () const;
+    uint64_t            getDeleteCount      () const;
 
-    uint64_t            getResizeCount  () const;
+    uint64_t            getResizeCount      () const;
     )
 
-    bool                find            (const key_t &pKey) const;
+    bool                find                (const key_t &pKey) const;
 
     //  Modifiers
 
-    bool                insert          (const key_t &pKey);
-    bool                erase           (const key_t &pKey);
+    bool                insert              (const key_t &pKey);
+    bool                erase               (const key_t &pKey);
 
     // Iterators and Iteration
 
-    iterator            begin           () const;
-    iterator            end             () const;
+    iterator            begin               () const;
+    iterator            end                 () const;
 
 
 
@@ -213,20 +217,20 @@ class AgHashTable {
 
     // Getters
 
-    bool        find_util       (const key_t &pKey, node_ptr_t pListElem) const;
+    bool        find_util                   (const key_t &pKey, node_ptr_t pListElem) const;
 
     // Modifiers
 
-    void        init            ();
+    void        init                        ();
 
-    bool        insert_util     (const key_t &pKey, node_ptr_t *pListElem);
-    bool        erase_util      (const key_t &pKey, node_ptr_t *pListElem);
+    bool        insert_util                 (const key_t &pKey, node_ptr_t *pListElem);
+    bool        erase_util                  (const key_t &pKey, node_ptr_t *pListElem);
 
-    bool        resize          (const uint64_t &pNumBuckets);
+    bool        resize                      (const uint64_t &pNumBuckets);
 
     // Iterators
 
-    aggr_ptr_t  getHashAggr     (const hash_t &pKeyHash) const;
+    aggr_ptr_t  getHashAggr                 (const hash_t &pKeyHash) const;
 
 
     bucket_ptr_t        mBucketArray;
@@ -387,6 +391,18 @@ AgHashTable<key_t, tHashFunc, tEquals>::getBucketCount () const
     return mBucketCount;
 }
 
+/**
+ * @brief                   Returns the maximum number of buckets which the hash table can have
+ *
+ * @return uint64_t         Maximum number of buckets which the hash table can have
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+uint64_t
+AgHashTable<key_t, tHashFunc, tEquals>::getBucketCount () const
+{
+    return sMaxBucketsAllowed;
+}
+
 DBG_MODE (
 
 /**
@@ -438,6 +454,41 @@ AgHashTable <key_t, tHashFunc, tEquals>::getResizeCount () const
 }
 
 )
+
+/**
+ * @brief                   Returns the number of keys in the supplied bucket
+ *
+ * @param pBucketId         Position of the bucket whose key count is to be found
+ *
+ * @return uint64_t         Number of keys in the bucket whose position is given
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+uint64_t
+AgHashTable<key_t, tHashFunc, tEquals>::getBucketKeyCount (const uint64_t &pBucketId) const
+{
+    if (pBucketId >= mBucketCount) {
+        return 0ULL;
+    }
+    return mBucketArray[pBucketId].keyCount;
+}
+
+/**
+ * @brief                   Returns the number of keys with unique hashs in the supplied bucket
+ *
+ * @param pBucketId         Position of the bucket whose unique hash count is to be returned
+ *
+ * @return uint64_t         Number of unique hashs in the bucket whose position is given
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+uint64_t
+AgHashTable<key_t, tHashFunc, tEquals>::getBucketHashCount (const uint64_t &pBucketId) const
+{
+    if (pBucketId >= mBucketCount) {
+        return 0ULL;
+    }
+    return mBucketArray[pBucketId].distinctHashCount;
+}
+
 
 /**
  * @brief                   Searches for a given key in the hash table
