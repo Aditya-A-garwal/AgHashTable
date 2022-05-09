@@ -130,6 +130,8 @@ class AgHashTable {
     static constexpr uint64_t   sNumKeysAllowed         = 16ULL;                        /** */
     static constexpr uint64_t   sResizeFactor           = 8ULL;                         /** */
 
+    static constexpr uint64_t   sMaxBucketsAllowed      = 1ULL << 24;                   /** */
+
 
 
     public:
@@ -520,7 +522,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
                 // resize the table if the bucket has too many keys with different hashs
                 // dont resize in case the number of keys are > maximum allowed but all have the same hash, since
                 // this would still cause all the keys to fall in the same bucket, causing repeated resizing at every subsequent insert
-                if ((mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed) && (mBucketArray[bucketId].keyCount > sNumKeysAllowed)) {
+                if ((mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed)
+                    && (mBucketArray[bucketId].keyCount > sNumKeysAllowed)
+                    && ((mBucketCount * sResizeFactor) < sMaxBucketsAllowed)) {
                     resize (mBucketCount * sResizeFactor);
                 }
             }
@@ -561,7 +565,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
         // resize the table if the bucket has too many keys with different hashs
         // dont resize in case the number of keys are > maximum allowed but all have the same hash, since
         // this would still cause all the keys to fall in the same bucket, causing repeated resizing at every subsequent insert
-        if ((++mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed) && (mBucketArray[bucketId].keyCount > sNumKeysAllowed)) {
+        if ((mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed)
+            && (mBucketArray[bucketId].keyCount > sNumKeysAllowed)
+            && ((mBucketCount * sResizeFactor) < sMaxBucketsAllowed)) {
             resize (mBucketCount * sResizeFactor);
         }
     }
