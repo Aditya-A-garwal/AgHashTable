@@ -168,8 +168,6 @@ class AgHashTable {
     AgHashTable     (const uint64_t &pBucketCount);
     AgHashTable     (const AgHashTable<key_t, tHashFunc, tEquals> &pOther) = delete;
 
-    void                init ();
-
     //  Destructors
 
     ~AgHashTable    ();
@@ -217,6 +215,8 @@ class AgHashTable {
 
     // Modifiers
 
+    void        init            ();
+
     bool        insert_util     (const key_t &pKey, node_ptr_t *pListElem);
     bool        erase_util      (const key_t &pKey, node_ptr_t *pListElem);
 
@@ -247,7 +247,7 @@ class AgHashTable {
 };
 
 /**
- * @brief Construct a new AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable object
+ * @brief                   Construct a new AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable object
  *
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
@@ -256,6 +256,11 @@ AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable ()
     init ();
 }
 
+/**
+ * @brief Construct a new AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable object
+ *
+ * @param pBucketCount      Number of buckets to initialize the hash table with
+ */
 template <typename key_t, auto tHashFunc, auto tEquals>
 AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable (const uint64_t &pBucketCount)
 {
@@ -263,12 +268,16 @@ AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable (const uint64_t &pBucketCoun
     init ();
 }
 
+/**
+ * @brief                   Initialize the hash table with the specified number of buckets
+ *
+ */
 template <typename key_t, auto tHashFunc, auto tEquals>
 void
 AgHashTable<key_t, tHashFunc, tEquals>::init ()
 {
+    // try to allocate the array of buckets
     mBucketArray        = new (std::nothrow) bucket_t[mBucketCount];
-
     DBG_MODE (
     if (mBucketArray == nullptr) {
         std::cout << "Allocation of bucket array failed while constructing\n";
@@ -302,24 +311,26 @@ AgHashTable<key_t, tHashFunc, tEquals>::init ()
 }
 
 /**
- * @brief Destroy the AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable object
+ * @brief                   Destroy the AgHashTable<key_t, tHashFunc, tEquals>::AgHashTable object
  *
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 AgHashTable<key_t, tHashFunc, tEquals>::~AgHashTable ()
 {
+    // iterate through each bucket in the array and delete it
     for (uint64_t bucketId = 0; bucketId < mBucketCount; ++bucketId) {
         delete mBucketArray[bucketId].hashListHead;
     }
 
+    // delete the array of buckets
     delete mBucketArray;
 }
 
 /**
- * @brief
+ * @brief                   Returns if the table could be successfully initialized
  *
- * @return true
- * @return false
+ * @return true             If the table could be successfully initialized
+ * @return false            If the table could not be successfully initialized
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
@@ -339,9 +350,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::initialized () const
 }
 
 /**
- * @brief
+ * @brief                   Returns the number of keys in the hash table (identical to getKeyCount())
  *
- * @return uint64_t
+ * @return uint64_t         Number of keys in the hash table
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
@@ -351,9 +362,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::size () const
 }
 
 /**
- * @brief
+ * @brief                   Returns the number of keys in the hash table (identical to size())
  *
- * @return uint64_t
+ * @return uint64_t         Number of keys in the hash table
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
@@ -363,9 +374,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::getKeyCount () const
 }
 
 /**
- * @brief
+ * @brief                   Returns the number of buckets in the hash table
  *
- * @return uint64_t
+ * @return uint64_t         Number of buckets in the hash table
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
@@ -377,9 +388,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::getBucketCount () const
 DBG_MODE (
 
 /**
- * @brief
+ * @brief                   Returns the amount of memory currently allocated by the hash table
  *
- * @return uint64_t
+ * @return uint64_t         Amount of memory (in bytes) allocated by the hash table
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
@@ -389,9 +400,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::getAllocAmount () const
 }
 
 /**
- * @brief
+ * @brief                   Returns the number of allocations performed by the hash table
  *
- * @return uint64_t
+ * @return uint64_t         Number of allocations performed by the hash table
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
@@ -401,9 +412,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::getAllocCount () const
 }
 
 /**
- * @brief
+ * @brief                   Returns the number of times memory has been freed by the hash table
  *
- * @return uint64_t
+ * @return uint64_t         Number of times memory has been freed by the hash table
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
@@ -413,9 +424,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::getDeleteCount () const
 }
 
 /**
- * @brief
+ * @brief                   Returns the number of times the hash table has been resized (number of buckets have been changed)
  *
- * @return uint64_t
+ * @return uint64_t         Number of times the hash table has been resized
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
@@ -427,12 +438,12 @@ AgHashTable <key_t, tHashFunc, tEquals>::getResizeCount () const
 )
 
 /**
- * @brief
+ * @brief                   Searches for a given key in the hash table
  *
- * @param pKey
+ * @param pKey              Key to search for
  *
- * @return true
- * @return false
+ * @return true             If the supplied key exists in the hash table
+ * @return false            If the supplied key does not exist in the hash table
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
@@ -467,12 +478,12 @@ AgHashTable<key_t, tHashFunc, tEquals>::find (const key_t &pKey) const
 }
 
 /**
- * @brief
+ * @brief                   Attempts to insert a new key into the hash table
  *
- * @param pKey
+ * @param pKey              Key to insert
  *
- * @return true
- * @return false
+ * @return true             If the key could successfully be inserted
+ * @return false            If the key could not be inserted (duplicate key found or allocation failure)
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
@@ -484,7 +495,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
     aggr_ptr_t          *aggrElem;                                  /** Pointer to the new aggregate node's predecessor's next-pointer */
     aggr_ptr_t          newAggr;                                    /** Pointer to new aggregate node */
 
-    bool                insertionState;                             /** */
+    bool                insertionState;                             /** Stores if insert_util could successfully insert the key into the aggregate node's linked list */
 
     // calculate the hash value of the key and find the bucket in which it should be insert into
     keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
@@ -500,10 +511,16 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
         if ((*aggrElem)->keyHash == keyHash) {
             insertionState  = insert_util (pKey, &((*aggrElem)->nodePtr));
 
+            // if the insertion was succesful, increment the key counters
             if (insertionState) {
                 ++mKeyCount;
                 ++(*aggrElem)->keyCount;
-                if ((mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed) && (++mBucketArray[bucketId].keyCount > sNumKeysAllowed)) {
+                ++mBucketArray[bucketId].keyCount;
+
+                // resize the table if the bucket has too many keys with different hashs
+                // dont resize in case the number of keys are > maximum allowed but all have the same hash, since
+                // this would still cause all the keys to fall in the same bucket, causing repeated resizing at every subsequent insert
+                if ((mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed) && (mBucketArray[bucketId].keyCount > sNumKeysAllowed)) {
                     resize (mBucketCount * sResizeFactor);
                 }
             }
@@ -535,10 +552,16 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
 
     insertionState  = insert_util (pKey, &((*aggrElem)->nodePtr));
 
+    // if the insertion was successfull, increment the corresponding key counters
     if (insertionState) {
         ++mKeyCount;
         ++(*aggrElem)->keyCount;
-        if ((++mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed) && (++mBucketArray[bucketId].keyCount > sNumKeysAllowed)) {
+        ++mBucketArray[bucketId].keyCount;
+
+        // resize the table if the bucket has too many keys with different hashs
+        // dont resize in case the number of keys are > maximum allowed but all have the same hash, since
+        // this would still cause all the keys to fall in the same bucket, causing repeated resizing at every subsequent insert
+        if ((++mBucketArray[bucketId].distinctHashCount > sNumDistinctAllowed) && (mBucketArray[bucketId].keyCount > sNumKeysAllowed)) {
             resize (mBucketCount * sResizeFactor);
         }
     }
@@ -547,12 +570,12 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
 }
 
 /**
- * @brief
+ * @brief                   Attempts to erase a given key from the hash table
  *
- * @param pKey
+ * @param pKey              Key to erase
  *
- * @return true
- * @return false
+ * @return true             If the key was successfully found and removed
+ * @return false            If the key could not be removed (no matching key was found)
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
@@ -562,8 +585,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
     uint64_t            bucketId;                                   /** Position of the bucket in which to insert the key */
 
     aggr_ptr_t          *aggrElem;                                  /** Pointer to the new aggregate node's predecessor's next-pointer */
+    aggr_ptr_t          toRem;                                      /** Pointer to the aggregate node to be removed (only used in case the key was the only key with it's hash value) */
 
-    bool                eraseState;                                 /** */
+    bool                eraseState;                                 /** Stores if erase_util could successfully erase the node from the aggregate node's linked list */
 
     // calculate the hash value of the key and find the bucket in which it should be insert into
     keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
@@ -578,10 +602,26 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
         // try to insert the new key into it's linked list
         if ((*aggrElem)->keyHash == keyHash) {
             eraseState  = erase_util (pKey, &((*aggrElem)->nodePtr));
+
+            // if successfully erased the key, decrement all key counters
             if (eraseState) {
                 --mKeyCount;
                 --(*aggrElem)->keyCount;
                 --mBucketArray[bucketId].keyCount;
+
+                // if this aggregate node has no elements, delete it
+                if ((*aggrElem)->keyCount == 0) {
+
+                    // take the node out and put it's successor in it's place
+                    toRem           = *aggrElem;
+                    *aggrElem       = (*aggrElem)->nextPtr;
+
+                    // set it's successor to NULL (to avoid recursive deletion)
+                    toRem->nextPtr  = nullptr;
+
+                    // delete it
+                    delete toRem;
+                }
             }
             return eraseState;
         }
@@ -592,23 +632,23 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
 
     // if the loop was completed, but no aggregate node with matching representative hash value could be found,
     // return failed erase
-
     return false;
 }
 
 /**
- * @brief
+ * @brief                   Utility function to find a key in an aggregate node's linked list
  *
- * @param pKey
- * @param pListElem
+ * @param pKey              Key to find
+ * @param pListElem         Linked list to search in
  *
- * @return true
- * @return false
+ * @return true             If the key could successfully be found
+ * @return false            If the key could not be found
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
 AgHashTable<key_t, tHashFunc, tEquals>::find_util (const key_t &pKey, node_ptr_t pListElem) const
 {
+    // iterator through all elements of the linked list
     while (pListElem != nullptr) {
 
         // if a matching key has been found, return successful find
@@ -616,6 +656,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::find_util (const key_t &pKey, node_ptr_t
             return true;
         }
 
+        // go to the next node
         pListElem   = pListElem->nextPtr;
     }
 
@@ -624,14 +665,14 @@ AgHashTable<key_t, tHashFunc, tEquals>::find_util (const key_t &pKey, node_ptr_t
 }
 
 /**
- * @brief
+ * @brief                   Utility function to insert a key in an aggregate node's linked list
  *
- * @param pKey
- * @param pKeyHash
- * @param pListElem
+ * @param pKey              Key to insert
+ * @param pKeyHash          Hash of the given key
+ * @param pListElem         Linked list to insert the key into
  *
- * @return true
- * @return false
+ * @return true             If the key could successfully be inserted
+ * @return false            If the key could not be inserted
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
@@ -670,14 +711,14 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert_util (const key_t &pKey, node_ptr
 }
 
 /**
- * @brief
+ * @brief                   Utility function to erase a key from an aggregate node's linked list
  *
- * @param pKey
- * @param pKeyHash
- * @param pListElem
+ * @param pKey              Key to erase
+ * @param pKeyHash          Hash of the given key
+ * @param pListElem         Linked list to erase the key from
  *
- * @return true
- * @return false
+ * @return true             If the key could successfully be erased
+ * @return false            If the key could not be erased
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
@@ -715,27 +756,31 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase_util (const key_t &pKey, node_ptr_
 }
 
 /**
- * @brief
+ * @brief                   Resizes the hash table to have the supplied number of buckets
  *
- * @param pNumBuckets
+ *                          Creates a new array of buckets of the specified size and moves aggregate nodes from
+ *                          the old bucket array to the new one, after which the old array is deleted
  *
- * @return true
- * @return false
+ * @param pNumBuckets       Number of buckets the hash table be resized to
+ *
+ * @return true             If the hash table could be resized successfully
+ * @return false            If the hash table could not be resized successfully (allocation failure)
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
 AgHashTable<key_t, tHashFunc, tEquals>::resize (const uint64_t &pNumBuckets)
 {
-    bucket_ptr_t        newArray;
-    aggr_ptr_t          *aggrElem;
-    aggr_ptr_t          *aggrInsertElem;
+    bucket_ptr_t        newArray;                                   /** New array of buckets to use */
+    aggr_ptr_t          *aggrElem;                                  /** Pointer to pointer to an aggregate node (used while iterating over aggregate nodes in the new bucket) */
+    aggr_ptr_t          *aggrInsertElem;                            /** Pointer to pointer to an aggregate node (used while iterating over aggregate nodes in the old bucket) */
 
-    uint64_t            newPosition;
+    uint64_t            newPosition;                                /** For each aggregate node, stores the position in which it will be inserted in the new bucket */
 
     DBG_MODE (
     ++mResizeCnt;
     )
 
+    // allocate the new array (return failed resize in case of failure)
     newArray        = new (std::nothrow) bucket_t[pNumBuckets];
     if (newArray == nullptr) {
         DBG_MODE (
@@ -753,34 +798,43 @@ AgHashTable<key_t, tHashFunc, tEquals>::resize (const uint64_t &pNumBuckets)
         )
     }
 
+    // iterare through all buckets in the old array for moving the aggregate nodes
     for (uint64_t bucketId = 0ULL; bucketId < mBucketCount; ++bucketId) {
 
+        // get a pointer to the pointer to the head of the current bucket's aggregate node list
         aggrInsertElem  = &(mBucketArray[bucketId].hashListHead);
 
+        // while an aggregate node exists in the current list, move it to the new bucket array
         while (*aggrInsertElem != nullptr) {
 
+            // using the hash value of the aggregate node, calculate its position in the new array and get a pointer to it's pointer
             newPosition                     = (*aggrInsertElem)->keyHash & (pNumBuckets - 1);
             aggrElem                        = &(newArray[newPosition].hashListHead);
 
+            // move to the end of the aggregate node list of the new array to find a vacant spot
             while (*aggrElem != nullptr) {
                 aggrElem    = &((*aggrElem)->nextPtr);
             }
 
+            // make the found empty spot point to the current aggregate node and accordingly increment the new bucket's distinct hash and key counts
             *aggrElem                       = *aggrInsertElem;
             ++newArray[newPosition].distinctHashCount;
             newArray[newPosition].keyCount  += (*aggrElem)->keyCount;
 
+            // move the aggregate node's successor in its place, and disconnect it from it's successor
             *aggrInsertElem                 = (*aggrInsertElem)->nextPtr;
             (*aggrElem)->nextPtr            = nullptr;
         }
     }
 
+    // delete the old bucket array (which should not have any aggregate nodes left)
     delete mBucketArray;
     DBG_MODE (
     ++mDeleteCnt;
     mAllocAmt       -= sizeof (bucket_t) * mBucketCount;
     )
 
+    // make the current bucket array point to the new array and update the bucket count
     mBucketArray    = newArray;
     mBucketCount    = pNumBuckets;
 
@@ -788,22 +842,24 @@ AgHashTable<key_t, tHashFunc, tEquals>::resize (const uint64_t &pNumBuckets)
 }
 
 /**
- * @brief
+ * @brief                   Returns a pointer to the aggregate node which contains nodes with the given hash value
  *
- * @param pKeyHash
+ * @param pKeyHash          Hash value to search for
  *
- * @return aggr_ptr_t
+ * @return aggr_ptr_t       Pointer to aggregate node with the matching hash value
  */
 template<typename key_t, auto tHashFunc, auto tEquals>
 typename AgHashTable<key_t, tHashFunc, tEquals>::aggr_ptr_t
 AgHashTable<key_t, tHashFunc, tEquals>::getHashAggr (const hash_t &pKeyHash) const
 {
-    uint64_t        bucketId;
-    aggr_ptr_t      aggrElem;
+    uint64_t        bucketId;                                       /** Index of the bucket in which the aggregate node should lie */
+    aggr_ptr_t      aggrElem;                                       /** Used to iterator over elements in the linked list of the aggregate node list */
 
+    // calculate the bucket in which the aggregate node should lie in (assuming it exists)
     bucketId        = pKeyHash & (mBucketCount - 1);
     aggrElem        = mBucketArray[bucketId].hashListHead;
 
+    // iterate through all the aggregate nodes in the bucket until one with the maching hash is found
     while (aggrElem != nullptr) {
         if (aggrElem->keyHash == pKeyHash) {
             break;
@@ -811,11 +867,12 @@ AgHashTable<key_t, tHashFunc, tEquals>::getHashAggr (const hash_t &pKeyHash) con
         aggrElem    = aggrElem->nextPtr;
     }
 
+    // return the found aggregate node (return null in case no such node is found)
     return aggrElem;
 }
 
 /**
- * @brief
+ * @brief                   Returns an iterator to the key with the smallest hash value in the table
  *
  * @return AgHashTable<key_t, tHashFunc, tEquals>::iterator
  */
@@ -823,33 +880,39 @@ template <typename key_t, auto tHashFunc, auto tEquals>
 typename AgHashTable<key_t, tHashFunc, tEquals>::iterator
 AgHashTable<key_t, tHashFunc, tEquals>::begin () const
 {
-    aggr_ptr_t  newAggrPtr;
-    hash_t      newHash;
+    //! if the smallest hash value present in the table is too low, then the function may take a lot of time
+    //! try to use the fact that the size of the table can't become too big
+    //! also use this while incrementing the iterators
 
+    aggr_ptr_t  aggrPtr;                                            /** Pointer to the aggregate node with the minimum hash value in the table */
+    hash_t      newHash;                                            /** Minimum hash value present in the table */
+
+    // if no keys are present, return end() iterator
     if (mKeyCount == 0) {
         return end ();
     }
 
+    // start with a hash of 0 and keep incrementing it while no aggregate node is found
     newHash     = 0;
-
     while (true) {
 
-        newAggrPtr  = getHashAggr (newHash);
+        aggrPtr     = getHashAggr (newHash);
 
-        if (newAggrPtr != nullptr) {
+        if (aggrPtr != nullptr) {
             break;
         }
 
-        if (++newHash == 0 || mKeyCount == 0) {
+        // if the keycount suddenyl becomes 0, return end()
+        if (mKeyCount == 0) {
             return end ();
         }
     }
 
-    return iterator {newAggrPtr->nodePtr, newAggrPtr, this};
+    return iterator {aggrPtr->nodePtr, aggrPtr, this};
 }
 
 /**
- * @brief
+ * @brief                   Returns an iterator to the logical key after the last key
  *
  * @return AgHashTable<key_t, tHashFunc, tEquals>::iterator
  */

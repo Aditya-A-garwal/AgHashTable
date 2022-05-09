@@ -26,22 +26,25 @@ template <typename key_t, auto tHashFunc, auto tEquals>
 typename AgHashTable<key_t, tHashFunc, tEquals>::iterator
 AgHashTable<key_t, tHashFunc, tEquals>::iterator::operator++ ()
 {
-    hash_t          newHash;
-    aggr_ptr_t      newAggrPtr;
+    hash_t          newHash;                                    /** Hash value of the next key to use (only used if all keys with the current hash value have been iterated over) */
+    aggr_ptr_t      newAggrPtr;                                 /** Pointer to the new aggregate node to use (only used if all keys with the current hash value have been iterated over) */
 
+    // if this is the end, return itseld
     if (mPtr == nullptr || mAggrPtr == nullptr || mTablePtr == nullptr) {
         return *this;
     }
 
+    // if another node exists after this one in the linked list, use it and return self
     if (mPtr->nextPtr != nullptr) {
         mPtr    = mPtr->nextPtr;
         return *this;
     }
 
+    // try to find the next hash which is present in the table and use the aggregate node corresponding to it
     newHash     = mAggrPtr->keyHash;
-
     while (true) {
 
+        // if all hashs have been used, return end()
         if (++newHash == 0) {
             mPtr        = nullptr;
             mAggrPtr    = nullptr;
@@ -49,13 +52,16 @@ AgHashTable<key_t, tHashFunc, tEquals>::iterator::operator++ ()
             return *this;
         }
 
+        // try to find an aggregate node with the given hash
         newAggrPtr      = mTablePtr->getHashAggr (newHash);
 
+        // if such an aggregate node exists, break the loop
         if (newAggrPtr != nullptr) {
             break;
         }
     }
 
+    // use the found aggregate node and the first node in its linked list and return
     mPtr        = newAggrPtr->nodePtr;
     mAggrPtr    = newAggrPtr;
 
