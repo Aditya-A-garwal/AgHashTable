@@ -28,6 +28,7 @@
 #include <unordered_set>
 
 // AgHashTable
+#define AG_DBG_MODE
 #include "AgHashTable.h"
 
 // ┌─┬─┐
@@ -233,6 +234,12 @@ format_integer (T pNum)
     return res;
 }
 
+uint32_t
+identity_func (const uint8_t *pPtr, const uint64_t &pLen)
+{
+    return pLen + (*(uint32_t *)pPtr);
+}
+
 int32_t     *buffInsert;
 int32_t     *buffFind;
 int32_t     *buffErase;
@@ -294,19 +301,21 @@ read_buffers (const char *pFilepath)
 void
 run_benchmark (int pN)
 {
-    std::unordered_set<int32_t>     table1;
-    std::unordered_set<int32_t>::iterator it1;
+    std::unordered_set<int32_t>         table1;
+    decltype (table1)::iterator         it1;
 
-    AgHashTable<int32_t>            table2;
-    // AgHashTable<int32_t>::iterator  it2;
+    AgHashTable<int32_t, identity_func> table2;
+    decltype (table2)::iterator         it2;
 
-    Timer                           timer;
-    int64_t                         measured;
+    Timer                               timer;
+    int64_t                             measured;
 
-    table results;
+    table                               results;
 
-    int32_t                         flag;
-    int32_t                         cntr;
+    int32_t                             flag;
+    int32_t                             cntr;
+
+    uint64_t                            memUsed;
 
     if (pN > maxN) {
         std::cout << "\nGiven " << format_integer (pN) << " operations exceeds the number of records supplied by the file\n";
@@ -337,6 +346,9 @@ run_benchmark (int pN)
     }
     measured = timer.elapsed ();
     results.add_row ({"Insertion", "AgHashTable", format_integer (cntr), format_integer (measured)});
+#if defined (AG_DBG_MODE)
+    memUsed     = table2.getAllocAmount ();
+#endif
 
 
     cntr = 0;
@@ -378,6 +390,21 @@ run_benchmark (int pN)
 
 
     std::cout << results << std::endl;
+
+#if defined (AG_DBG_MODE)
+
+    table       agMetrics;
+
+    agMetrics.add_headers ({"Metric", "Count", "Unit"});
+    agMetrics.add_row ({"Allocations", format_integer (table2.getAllocCount ()), "-"});
+    agMetrics.add_row ({"Frees", format_integer (table2.getDeleteCount ()), "-"});
+    agMetrics.add_row ({"Memory Allocated", format_integer (memUsed), "bytes"});
+    agMetrics.add_row ({"Buckets", format_integer (table2.getBucketCount ()), "-"});
+    agMetrics.add_row ({"Resizes", format_integer (table2.getResizeCount ()), "-"});
+
+    std::cout << agMetrics << '\n';
+
+#endif
 }
 
 int
