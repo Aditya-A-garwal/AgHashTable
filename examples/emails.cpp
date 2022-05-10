@@ -289,7 +289,7 @@ main (void)
     }
 
     for (auto &e : ar) {
-        if (table.find (e) == false) {
+        if (table.exists (e) == false) {
             std::cout << "Could not find " << e << std::endl;
             return 1;
         }

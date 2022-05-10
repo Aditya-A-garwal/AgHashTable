@@ -27,7 +27,7 @@
 // std::unordered_set
 #include <unordered_set>
 
-// AgAVLTree
+// AgHashTable
 #include "AgHashTable.h"
 
 // ┌─┬─┐
@@ -351,7 +351,7 @@ run_benchmark (int pN)
     cntr = 0;
     timer.reset ();
     for (auto i = 0; i < pN; ++i) {
-        flag                        = table2.find (buffFind[i]);
+        flag                        = table2.exists (buffFind[i]);
         cntr                        += flag;
     }
     measured = timer.elapsed ();

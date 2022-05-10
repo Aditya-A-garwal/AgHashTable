@@ -96,7 +96,7 @@ void
 NoLock::Find ()
 {
     for (int32_t i = 0; i < NUM_ELEMENTS; ++i) {
-        NoLock::sCntr   += (uint64_t) table.find (NoLock::sGen () % ELEMENT_RANGE);
+        NoLock::sCntr   += (uint64_t) table.exists (NoLock::sGen () % ELEMENT_RANGE);
     }
 
     std::cout << "NO LOCK: " << NoLock::sCntr << '\n';
@@ -155,7 +155,7 @@ YesLock::Find ()
 {
     for (int32_t i = 0; i < NUM_ELEMENTS; ++i) {
         sTableMutex.lock ();
-        YesLock::sCntr   += (uint64_t) table.find (YesLock::sGen () % ELEMENT_RANGE);
+        YesLock::sCntr   += (uint64_t) table.exists (YesLock::sGen () % ELEMENT_RANGE);
         sTableMutex.unlock ();
     }
 

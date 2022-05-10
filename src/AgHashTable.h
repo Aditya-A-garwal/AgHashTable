@@ -197,7 +197,8 @@ class AgHashTable {
     uint64_t            getResizeCount      () const;
     )
 
-    bool                find                (const key_t &pKey) const;
+    iterator            find                (const key_t &pKey) const;
+    bool                exists              (const key_t &pkey) const;
 
     //  Modifiers
 
@@ -217,7 +218,8 @@ class AgHashTable {
 
     // Getters
 
-    bool        find_util                   (const key_t &pKey, node_ptr_t pListElem) const;
+    iterator    find_util                   (const key_t &pKey, aggr_ptr_t pAggrElem) const;
+    bool        exists_util                 (const key_t &pKey, node_ptr_t pListElem) const;
 
     // Modifiers
 
@@ -398,7 +400,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::getBucketCount () const
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, tHashFunc, tEquals>::getBucketCount () const
+AgHashTable<key_t, tHashFunc, tEquals>::getMaxBucketCount () const
 {
     return sMaxBucketsAllowed;
 }
@@ -491,7 +493,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::getBucketHashCount (const uint64_t &pBuc
 
 
 /**
- * @brief                   Searches for a given key in the hash table
+ * @brief                   Returns if a given key exists in the hash table
  *
  * @param pKey              Key to search for
  *
@@ -500,6 +502,46 @@ AgHashTable<key_t, tHashFunc, tEquals>::getBucketHashCount (const uint64_t &pBuc
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
+AgHashTable<key_t, tHashFunc, tEquals>::exists (const key_t &pKey) const
+{
+    hash_t              keyHash;                                    /** Hash value of the key */
+    uint64_t            bucketId;                                   /** Position of the bucket in which to insert the key */
+
+    aggr_ptr_t          aggrElem;                                   /** Pointer to the new aggregate node's predecessor's next-pointer */
+
+    // calculate the hash value of the key and find the bucket in which it should be insert into
+    keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+    bucketId        = keyHash & (mBucketCount - 1);
+
+    // get a pointer to the pointer to the aggregate list's head
+    aggrElem        = mBucketArray[bucketId].hashListHead;
+
+    while (aggrElem != nullptr) {
+
+        // if an aggregate node's representative hash value matches with the key's hash value.
+        // try to find the new key in it's linked list
+        if (aggrElem->keyHash == keyHash) {
+            return exists_util (pKey, aggrElem->nodePtr);
+        }
+
+        // go to the next aggregate node
+        aggrElem    = aggrElem->nextPtr;
+    }
+
+    // if node aggregate node with matching representative hash value is found, return failed find
+    return false;
+}
+
+/**
+ * @brief                   Searches for a given key in the hash table and returns an iterator to it (returns end() if no matching key is found)
+ *
+ * @param pKey              Key to search for
+ *
+ * @return true             If the supplied key exists in the hash table
+ * @return false            If the supplied key does not exist in the hash table
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+typename AgHashTable<key_t, tHashFunc, tEquals>::iterator
 AgHashTable<key_t, tHashFunc, tEquals>::find (const key_t &pKey) const
 {
     hash_t              keyHash;                                    /** Hash value of the key */
@@ -519,7 +561,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::find (const key_t &pKey) const
         // if an aggregate node's representative hash value matches with the key's hash value.
         // try to find the new key in it's linked list
         if (aggrElem->keyHash == keyHash) {
-            return find_util (pKey, aggrElem->nodePtr);
+            return find_util (pKey, aggrElem);
         }
 
         // go to the next aggregate node
@@ -527,7 +569,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::find (const key_t &pKey) const
     }
 
     // if node aggregate node with matching representative hash value is found, return failed find
-    return false;
+    return end ();
 }
 
 /**
@@ -693,7 +735,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
 }
 
 /**
- * @brief                   Utility function to find a key in an aggregate node's linked list
+ * @brief                   Utility function to check if a key exists in an aggregate node's linked list
  *
  * @param pKey              Key to find
  * @param pListElem         Linked list to search in
@@ -703,7 +745,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 bool
-AgHashTable<key_t, tHashFunc, tEquals>::find_util (const key_t &pKey, node_ptr_t pListElem) const
+AgHashTable<key_t, tHashFunc, tEquals>::exists_util (const key_t &pKey, node_ptr_t pListElem) const
 {
     // iterator through all elements of the linked list
     while (pListElem != nullptr) {
@@ -719,6 +761,39 @@ AgHashTable<key_t, tHashFunc, tEquals>::find_util (const key_t &pKey, node_ptr_t
 
     // if no duplicate key could be found, return failed find
     return false;
+}
+
+/**
+ * @brief                   Utility function to search for a key in an aggregate node's linked list and return an iterator to it (end() if no matching key is found)
+ *
+ * @param pKey              Key to find
+ * @param pListElem         Linked list to search in
+ *
+ * @return true             If the key could successfully be found
+ * @return false            If the key could not be found
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+typename AgHashTable<key_t, tHashFunc, tEquals>::iterator
+AgHashTable<key_t, tHashFunc, tEquals>::find_util (const key_t &pKey, aggr_ptr_t pAggrPtr) const
+{
+    node_ptr_t      pListElem;                      /** Pointer to nodes in the linked list (used while iterating over the linked list to find a matching key) */
+
+    pListElem       = pAggrPtr->nodePtr;
+
+    // iterator through all elements of the linked list
+    while (pListElem != nullptr) {
+
+        // if a matching key has been found, return successful find
+        if (tEquals (pKey, pListElem->key)) {
+            return iterator {pListElem, pAggrPtr, this};
+        }
+
+        // go to the next node
+        pListElem   = pListElem->nextPtr;
+    }
+
+    // if no duplicate key could be found, return failed find
+    return end ();
 }
 
 /**

@@ -163,7 +163,7 @@ insert (int32_t &pVal)
 void
 find (int32_t &pVal)
 {
-    cntr.fetch_add ((int32_t) table.find (pVal), std::memory_order_seq_cst);
+    cntr.fetch_add ((int32_t) table.exists (pVal), std::memory_order_seq_cst);
 }
 
 void

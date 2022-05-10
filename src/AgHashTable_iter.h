@@ -108,7 +108,7 @@ template <typename key_t, auto tHashFunc, auto tEquals>
 bool
 AgHashTable<key_t, tHashFunc, tEquals>::iterator::operator== (const iterator &pOther) const
 {
-    return (mPtr == pOther.mPtr) && (mTablePtr == pOther.mtablePtr);
+    return (mPtr == pOther.mPtr) && (mTablePtr == pOther.mTablePtr);
 }
 
 /**
