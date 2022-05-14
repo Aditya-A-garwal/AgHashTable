@@ -6,6 +6,34 @@
  *
  */
 
+#include <cstring>
+
+template <typename uint_t>
+uint_t
+ag_fnv1a (const uint8_t *pBytes, const uint64_t &pLen)
+{
+
+    uint_t      res     {2'166'136'261};
+    uint_t      buff    {0};
+
+    uint64_t    len     {pLen / sizeof (uint_t)};
+    uint64_t    rem     {pLen % sizeof (uint_t)};
+
+    for (uint64_t i = 0; i < len; ++i) {
+        res     ^= ((const uint_t *) pBytes) [i];
+        res     *= 16'777'619;
+    }
+
+    if (rem) {
+        memcpy (&buff, pBytes + pLen - rem, rem);
+
+        res     ^= buff;
+        res     *= 16'777'619;
+    }
+
+    return res;
+}
+
 uint16_t
 ag_pearson_16_hash (const uint8_t *pBytes, const uint64_t pLen)
 {
