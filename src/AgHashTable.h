@@ -70,7 +70,7 @@ ag_hashtable_default_equals (const val_t &pA, const val_t &pB)
  * @tparam tHashFunc        Hash function to use (defaults to 16 bit pearson hash)
  * @tparam tEquals          Comparator to use while making equals comparisons (defaults to operator==)
  */
-template <typename key_t, auto tHashFunc = ag_pearson_16_hash, auto tEquals = ag_hashtable_default_equals<key_t>>
+template <typename key_t, auto tHashFunc = ag_fnv1a<uint32_t>, auto tEquals = ag_hashtable_default_equals<key_t>>
 class AgHashTable {
 
 
@@ -126,11 +126,13 @@ class AgHashTable {
 
 
     static constexpr uint64_t   sHashBitness            = sizeof (hash_t) * 8ULL;       /** Bitness of the return type of the hash function */
-    static constexpr uint64_t   sNumDistinctAllowed     = 2ULL;                         /** Number of distinct hashs allowed per bucket before resizing is considered */
+    static constexpr uint64_t   sNumDistinctAllowed     = 1ULL;                         /** Number of distinct hashs allowed per bucket before resizing is considered */
     static constexpr uint64_t   sNumKeysAllowed         = 16ULL;                        /** Number of keys allowed in a bucket before resizing is considered */
     static constexpr uint64_t   sResizeFactor           = 8ULL;                         /** Factor by which the size of the hash table grows */
 
+    //! URGENT This can not be more than pow (2, sHashBitness * 8), make sure to handle the case when sHashBitness = 8, as that would cause a left shift overflow
     static constexpr uint64_t   sMaxBucketsAllowed      = 1ULL << 24;                   /** Maxmimum number of buckets allowed in the hash table */
+    // static constexpr uint64_t   sMaxBucketsAllowed      = 256;                             /** Maxmimum number of buckets allowed in the hash table */
 
 
 
@@ -218,17 +220,17 @@ class AgHashTable {
 
     // Getters
 
-    iterator    find_util                   (const key_t &pKey, aggr_ptr_t pAggrElem) const;
-    bool        exists_util                 (const key_t &pKey, node_ptr_t pListElem) const;
+    iterator            find_util           (const key_t &pKey, aggr_ptr_t pAggrElem) const;
+    bool                exists_util         (const key_t &pKey, node_ptr_t pListElem) const;
 
     // Modifiers
 
-    void        init                        ();
+    void                init                ();
 
-    bool        insert_util                 (const key_t &pKey, node_ptr_t *pListElem);
-    bool        erase_util                  (const key_t &pKey, node_ptr_t *pListElem);
+    bool                insert_util         (const key_t &pKey, node_ptr_t *pListElem);
+    bool                erase_util          (const key_t &pKey, node_ptr_t *pListElem);
 
-    bool        resize                      (const uint64_t &pNumBuckets);
+    bool                resize              (const uint64_t &pNumBuckets);
 
     // Iterators
 
@@ -242,7 +244,7 @@ class AgHashTable {
     )
 
     uint64_t            mKeyCount       {0ULL};
-    uint64_t            mBucketCount    {256ULL};
+    uint64_t            mBucketCount    {64ULL};
 
     DBG_MODE (
     uint64_t            mAllocAmt       {0ULL};
@@ -468,10 +470,7 @@ template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
 AgHashTable<key_t, tHashFunc, tEquals>::getBucketKeyCount (const uint64_t &pBucketId) const
 {
-    if (pBucketId >= mBucketCount) {
-        return 0ULL;
-    }
-    return mBucketArray[pBucketId].keyCount;
+    return (pBucketId < mBucketCount) ? (mBucketArray[pBucketId].keyCount) : (0ULL);
 }
 
 /**
@@ -485,10 +484,7 @@ template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
 AgHashTable<key_t, tHashFunc, tEquals>::getBucketHashCount (const uint64_t &pBucketId) const
 {
-    if (pBucketId >= mBucketCount) {
-        return 0ULL;
-    }
-    return mBucketArray[pBucketId].distinctHashCount;
+    return (pBucketId < mBucketCount) ? (mBucketArray[pBucketId].distinctHashCount) : (0ULL);
 }
 
 
@@ -654,6 +650,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
         ++mKeyCount;
         ++(*aggrElem)->keyCount;
         ++mBucketArray[bucketId].keyCount;
+        ++mBucketArray[bucketId].distinctHashCount;
 
         // resize the table if the bucket has too many keys with different hashs
         // dont resize in case the number of keys are > maximum allowed but all have the same hash, since
@@ -663,6 +660,14 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
             && ((mBucketCount * sResizeFactor) < sMaxBucketsAllowed)) {
             resize (mBucketCount * sResizeFactor);
         }
+    }
+    else {
+        newAggr             = *aggrElem;
+        *aggrElem           = newAggr->nextPtr;
+
+        newAggr->nextPtr    = nullptr;
+
+        delete newAggr;
     }
 
     return insertionState;
@@ -708,8 +713,10 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
                 --(*aggrElem)->keyCount;
                 --mBucketArray[bucketId].keyCount;
 
-                // if this aggregate node has no elements, delete it
+                // if this aggregate node has no elements, delete it and decrement the number of distinct hashs in the bucket
                 if ((*aggrElem)->keyCount == 0) {
+
+                    --mBucketArray[bucketId].distinctHashCount;
 
                     // take the node out and put it's successor in it's place
                     toRem           = *aggrElem;
@@ -1012,7 +1019,7 @@ template <typename key_t, auto tHashFunc, auto tEquals>
 typename AgHashTable<key_t, tHashFunc, tEquals>::iterator
 AgHashTable<key_t, tHashFunc, tEquals>::begin () const
 {
-    //! if the smallest hash value present in the table is too low, then the function may take a lot of time
+    //! if the smallest hash value present in the table is too high, then the function may take a lot of time
     //! try to use the fact that the size of the table can't become too big
     //! also use this while incrementing the iterators
 
