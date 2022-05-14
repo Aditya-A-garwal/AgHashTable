@@ -30,7 +30,7 @@
 namespace   chrono  = std::chrono;
 
 constexpr int32_t   NUM_ELEMENTS    = 1'000'000;        /** Number of keys to use per operation */
-constexpr int32_t   ELEMENT_RANGE   = 1'000'000;        /** Range of keys, includes 0, does not include ELEMENT_RANGE */
+// constexpr int32_t   ELEMENT_RANGE   = 1'000'000;        /** Range of keys, includes 0, does not include ELEMENT_RANGE */
 
 template <typename first_t, typename second_t>
 struct pair {
