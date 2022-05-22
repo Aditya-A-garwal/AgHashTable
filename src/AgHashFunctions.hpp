@@ -20,7 +20,6 @@ ag_fnv1a (const key_t *pKey)
     const uint8_t               *pBytes  = (const uint8_t *)pKey;
 
     return_t                    res     {2'166'136'261};
-    return_t                    buff    {0};
 
     for (uint64_t i = 0; i < len; ++i) {
         res     ^= ((const return_t *) pBytes) [i];
@@ -28,6 +27,9 @@ ag_fnv1a (const key_t *pKey)
     }
 
     if constexpr (rem != 0) {
+
+        return_t                    buff    {0};
+
         memcpy (&buff, pBytes + sKeySize - rem, rem);
 
         res     ^= buff;

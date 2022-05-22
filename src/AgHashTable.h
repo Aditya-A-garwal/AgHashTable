@@ -54,7 +54,7 @@ template <typename val_t>
 static bool
 ag_hashtable_default_equals (const val_t &pA, const val_t &pB)
 {
-    if constexpr (std::is_same<val_t, char *>::value or std::is_same<val_t, const char *>::value) {
+    if constexpr (std::is_same<val_t, char *>::value || std::is_same<val_t, const char *>::value) {
         // if the operands are C-style strings, don't compare pointer values, instead use strcmp to compare internal values
         return strcmp (pA, pB) == 0;
     }
