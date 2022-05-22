@@ -237,25 +237,6 @@ format_integer (T pNum)
     return res;
 }
 
-uint32_t
-identity_func (const uint8_t *pPtr, const uint64_t &pLen)
-{
-    return pLen + (*(uint32_t *)pPtr);
-}
-
-class id_func_class {
-
-    public:
-
-    uint64_t
-    operator () (const int32_t &val) const
-    {
-        return *((uint64_t *)&val);
-    }
-
-    private:
-
-};
 
 int32_t     *buffInsert;
 int32_t     *buffFind;

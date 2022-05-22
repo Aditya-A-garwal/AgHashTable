@@ -30,7 +30,7 @@ main (void)
 {
     AgHashTable<uint64_t, id>   table;
     // std::unordered_set<uint64_t>    table;
-    uint64_t                    cntr    {0ULL};
+    // uint64_t                    cntr    {0ULL};
 
     auto start              = chrono::high_resolution_clock::now();
 
