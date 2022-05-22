@@ -30,7 +30,9 @@ endmacro ()
 
 macro (set_lib_links)
 
-    if (NOT WIN32 OR MINGW)
+    find_library (pthreads_exist pthread)
+
+    if (pthreads_exist)
         target_link_libraries (
             emails
             pthread
