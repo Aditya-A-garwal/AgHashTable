@@ -35,7 +35,8 @@ main (void)
     auto start              = chrono::high_resolution_clock::now();
 
     for (uint64_t i = 0; i < 10'000'000; ++i) {
-        cntr += (uint64_t) table.insert (i);
+        table.insert (i);
+        // cntr += (uint64_t) table.insert (i);
         // cntr += (uint64_t) (table.insert (i).second);
     }
 
