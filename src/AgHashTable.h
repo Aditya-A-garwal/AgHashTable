@@ -198,6 +198,8 @@ class AgHashTable {
     uint64_t            get_delete_count        () const;
 
     uint64_t            get_resize_count        () const;
+
+    uint64_t            get_aggregate_count     () const;
     )
 
     iterator            find                    (const key_t &pKey) const;
@@ -253,6 +255,8 @@ class AgHashTable {
     uint64_t            mDeleteCnt      {0ULL};
 
     uint64_t            mResizeCnt      {0ULL};
+
+    uint64_t            mAggregateCnt   {0ULL};
     )
 
 };
@@ -458,6 +462,13 @@ AgHashTable <key_t, tHashFunc, tEquals>::get_resize_count () const
     return mResizeCnt;
 }
 
+template <typename key_t, auto tHashFunc, auto tEquals>
+uint64_t
+AgHashTable <key_t, tHashFunc, tEquals>::get_aggregate_count () const
+{
+    return mAggregateCnt;
+}
+
 )
 
 /**
@@ -652,6 +663,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
         ++(*aggrElem)->keyCount;
         ++mBucketArray[bucketId].keyCount;
         ++mBucketArray[bucketId].distinctHashCount;
+        DBG_MODE (
+        ++mAggregateCnt;
+        )
 
         // resize the table if the bucket has too many keys with different hashs
         // dont resize in case the number of keys are > maximum allowed but all have the same hash, since
@@ -720,6 +734,9 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
                 if ((*aggrElem)->keyCount == 0) {
 
                     --mBucketArray[bucketId].distinctHashCount;
+                    DBG_MODE (
+                    ++mAggregateCnt;
+                    )
 
                     // take the node out and put it's successor in it's place
                     toRem           = *aggrElem;
