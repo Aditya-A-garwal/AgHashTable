@@ -314,11 +314,11 @@ AgHashTable<key_t, tHashFunc, tEquals>::init ()
     )
     )
 
-    DBG_MODE (
+#if defined (AG_DBG_MODE) && defined (AG_PRINT_INIT_INFO)
     std::cout << "sizeof node_t: " << sizeof (node_t) << std::endl;
     std::cout << "sizeof aggregate_node_t: " << sizeof (aggregate_node_t) << std::endl;
     std::cout << "sizeof bucket_t: " << sizeof (bucket_t) << std::endl;
-    )
+#endif
 }
 
 /**
