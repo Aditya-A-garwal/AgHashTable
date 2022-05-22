@@ -28,11 +28,11 @@ ag_fnv1a (const key_t *pKey)
 
     if constexpr (rem != 0) {
 
-        return_t                    buff    {0};
+        return_t                    extraBytes  {0};
 
-        memcpy (&buff, pBytes + sKeySize - rem, rem);
+        memcpy (&extraBytes, pBytes + sKeySize - rem, rem);
 
-        res     ^= buff;
+        res     ^= extraBytes;
         res     *= 16'777'619;
     }
 
@@ -49,7 +49,6 @@ ag_fnv1a_n (const key_t *pKey, const uint64_t &pKeySize)
     uint64_t                    rem     {pKeySize % sizeof (return_t)};
 
     return_t                    res     {2'166'136'261};
-    return_t                    buff    {0};
 
     for (uint64_t i = 0; i < len; ++i) {
         res     ^= ((const return_t *) pBytes) [i];
@@ -57,9 +56,12 @@ ag_fnv1a_n (const key_t *pKey, const uint64_t &pKeySize)
     }
 
     if (rem) {
-        memcpy (&buff, pBytes + pKeySize - rem, rem);
 
-        res     ^= buff;
+        return_t                    extraBytes  {0};
+
+        memcpy (&extraBytes, pBytes + pKeySize - rem, rem);
+
+        res     ^= extraBytes;
         res     *= 16'777'619;
     }
 
