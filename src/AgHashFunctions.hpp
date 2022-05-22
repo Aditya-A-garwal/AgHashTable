@@ -8,24 +8,27 @@
 
 #include <cstring>
 
-template <typename uint_t>
-uint_t
-ag_fnv1a (const uint8_t *pBytes, const uint64_t &pLen)
+template <typename key_t, typename return_t>
+return_t
+ag_fnv1a (const key_t *pKey)
 {
+    static constexpr uint64_t   sKeySize    = sizeof (key_t);
 
-    uint_t      res     {2'166'136'261};
-    uint_t      buff    {0};
+    static constexpr uint64_t   len         = sKeySize / sizeof (return_t);
+    static constexpr uint64_t   rem         = sKeySize % sizeof (return_t);
 
-    uint64_t    len     {pLen / sizeof (uint_t)};
-    uint64_t    rem     {pLen % sizeof (uint_t)};
+    const uint8_t               *pBytes  = (const uint8_t *)pKey;
+
+    return_t                    res     {2'166'136'261};
+    return_t                    buff    {0};
 
     for (uint64_t i = 0; i < len; ++i) {
-        res     ^= ((const uint_t *) pBytes) [i];
+        res     ^= ((const return_t *) pBytes) [i];
         res     *= 16'777'619;
     }
 
-    if (rem) {
-        memcpy (&buff, pBytes + pLen - rem, rem);
+    if constexpr (rem != 0) {
+        memcpy (&buff, pBytes + sKeySize - rem, rem);
 
         res     ^= buff;
         res     *= 16'777'619;
@@ -34,10 +37,40 @@ ag_fnv1a (const uint8_t *pBytes, const uint64_t &pLen)
     return res;
 }
 
-uint16_t
-ag_pearson_16_hash (const uint8_t *pBytes, const uint64_t pLen)
+template <typename key_t, typename return_t>
+return_t
+ag_fnv1a_n (const key_t *pKey, const uint64_t &pKeySize)
 {
-    static constexpr uint16_t  perm[]  = {
+    const uint8_t               *pBytes  = (const uint8_t *)pKey;
+
+    uint64_t                    len     {pKeySize / sizeof (return_t)};
+    uint64_t                    rem     {pKeySize % sizeof (return_t)};
+
+    return_t                    res     {2'166'136'261};
+    return_t                    buff    {0};
+
+    for (uint64_t i = 0; i < len; ++i) {
+        res     ^= ((const return_t *) pBytes) [i];
+        res     *= 16'777'619;
+    }
+
+    if (rem) {
+        memcpy (&buff, pBytes + pKeySize - rem, rem);
+
+        res     ^= buff;
+        res     *= 16'777'619;
+    }
+
+    return res;
+}
+
+template <typename key_t>
+uint16_t
+ag_pearson_16_hash (const key_t *pKey)
+{
+    static constexpr uint64_t   sKeySize    = sizeof (key_t);
+
+    static constexpr uint16_t   perm[]  = {
         0x0,
         0x1,
         0x2,
@@ -65576,14 +65609,16 @@ ag_pearson_16_hash (const uint8_t *pBytes, const uint64_t pLen)
         0xffff,
     };
 
-    uint16_t            res     = 0;
+    const uint8_t               *pBytes = (const uint8_t *)pKey;
 
-    for (uint16_t i = 0; i < (pLen/2); ++i) {
+    uint16_t                    res     = 0;
+
+    for (uint16_t i = 0; i < (sKeySize/2); ++i) {
         res     = perm[res ^ ((uint16_t *)pBytes)[i]];
     }
 
-    if (pLen & 1) {
-        res     = perm[res ^ pBytes[pLen - 1]];
+    if constexpr (sKeySize & 1) {
+        res     = perm[res ^ pBytes[sKeySize - 1]];
     }
 
     return res;

@@ -20,9 +20,9 @@
 namespace chrono = std::chrono;
 
 uint64_t
-id (const uint8_t *pPtr, const uint64_t &pLen)
+id (const uint64_t *pPtr)
 {
-    return (*(uint64_t *)pPtr) + pLen;
+    return *pPtr;
 }
 
 int

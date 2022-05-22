@@ -70,7 +70,7 @@ ag_hashtable_default_equals (const val_t &pA, const val_t &pB)
  * @tparam tHashFunc        Hash function to use (defaults to 16 bit pearson hash)
  * @tparam tEquals          Comparator to use while making equals comparisons (defaults to operator==)
  */
-template <typename key_t, auto tHashFunc = ag_fnv1a<uint32_t>, auto tEquals = ag_hashtable_default_equals<key_t>>
+template <typename key_t, auto tHashFunc = ag_fnv1a<key_t, size_t>, auto tEquals = ag_hashtable_default_equals<key_t>>
 class AgHashTable {
 
 
@@ -79,7 +79,8 @@ class AgHashTable {
 
 
 
-    using       hash_t          = typename std::invoke_result<decltype (tHashFunc), const uint8_t *, const uint64_t>::type;     /** Data type returned by the hash function (must be unsigned integral type */
+    using       hash_t          = typename std::invoke_result<decltype (tHashFunc), const key_t *>::type;     /** Data type returned by the hash function (must be unsigned integral type */
+
     static_assert (std::is_unsigned<hash_t>::value, "Return type of hash functions must be unsigned integer");
 
     /**
@@ -506,7 +507,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::exists (const key_t &pKey) const
     aggr_ptr_t          aggrElem;                                   /** Pointer to the new aggregate node's predecessor's next-pointer */
 
     // calculate the hash value of the key and find the bucket in which it should be insert into
-    keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+    keyHash         = tHashFunc (&pKey);
     bucketId        = keyHash & (mBucketCount - 1);
 
     // get a pointer to the pointer to the aggregate list's head
@@ -546,7 +547,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::find (const key_t &pKey) const
     aggr_ptr_t          aggrElem;                                   /** Pointer to the new aggregate node's predecessor's next-pointer */
 
     // calculate the hash value of the key and find the bucket in which it should be insert into
-    keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+    keyHash         = tHashFunc (&pKey);
     bucketId        = keyHash & (mBucketCount - 1);
 
     // get a pointer to the pointer to the aggregate list's head
@@ -589,7 +590,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
     bool                insertionState;                             /** Stores if insert_util could successfully insert the key into the aggregate node's linked list */
 
     // calculate the hash value of the key and find the bucket in which it should be insert into
-    keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+    keyHash         = tHashFunc (&pKey);
     bucketId        = keyHash & (mBucketCount - 1);
 
     // get a pointer to the pointer to the aggregate list's head
@@ -661,12 +662,14 @@ AgHashTable<key_t, tHashFunc, tEquals>::insert (const key_t &pKey)
             resize (mBucketCount * sResizeFactor);
         }
     }
+    // if the insertion failed, then remove the newly created aggregate node as well
     else {
+        // get it and set its predecessor's successor to it's successor
         newAggr             = *aggrElem;
         *aggrElem           = newAggr->nextPtr;
 
+        // set its successor to NULL and delete it
         newAggr->nextPtr    = nullptr;
-
         delete newAggr;
     }
 
@@ -694,7 +697,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
     bool                eraseState;                                 /** Stores if erase_util could successfully erase the node from the aggregate node's linked list */
 
     // calculate the hash value of the key and find the bucket in which it should be insert into
-    keyHash         = tHashFunc ((uint8_t *)&pKey, sizeof (key_t));
+    keyHash         = tHashFunc (&pKey);
     bucketId        = keyHash & (mBucketCount - 1);
 
     // get a pointer to the pointer to the aggregate list's head

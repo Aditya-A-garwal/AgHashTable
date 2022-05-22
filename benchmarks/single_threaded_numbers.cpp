@@ -321,7 +321,7 @@ run_benchmark (int pN)
     std::unordered_set<int32_t>         table1;
     decltype (table1)::iterator         it1;
 
-    AgHashTable<int32_t, ag_fnv1a<uint64_t>>  table2;
+    AgHashTable<int32_t>                table2;
     decltype (table2)::iterator         it2;
 
     Timer                               timer;
@@ -330,13 +330,13 @@ run_benchmark (int pN)
     table                               results;
     table                               bucketInfo;
 #ifdef AG_DBG_MODE
-    table       agMetrics;
+    table                               agMetrics;
+    uint64_t                            memUsed;
 #endif
 
     int32_t                             flag;
     int32_t                             cntr;
 
-    uint64_t                            memUsed;
 
     // int64_t                             insTimeTotal1    {0ULL};
     // int64_t                             insTimeMin1      {0ULL};

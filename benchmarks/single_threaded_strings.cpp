@@ -280,18 +280,11 @@ read_buffers (const char *pFilepath)
     std::cout << "\rDone Reading File\n";
 }
 
-uint64_t
-fnv1a_string (const uint8_t *pPtr, const uint64_t &pLen)
-{
-    (void)pLen;
-    return ag_fnv1a<uint64_t> (pPtr, strnlen ((const char *)pPtr, maxStrLength));
-}
 
 uint64_t
-pearson_string (const uint8_t *pPtr, const uint64_t &pLen)
+fnv1a_string (const char * const *pPtr)
 {
-    (void)pLen;
-    return ag_pearson_16_hash (pPtr, strnlen ((const char *)pPtr, maxStrLength));
+    return ag_fnv1a_n<char, uint64_t> (*pPtr, strnlen ((const char *)*pPtr, maxStrLength));
 }
 
 void
@@ -300,7 +293,7 @@ run_benchmark (int pN)
     std::unordered_set<const char *>    table1;
     decltype (table1)::iterator         it1;
 
-    AgHashTable<const char *, pearson_string>  table2;
+    AgHashTable<const char *, fnv1a_string>  table2;
     decltype (table2)::iterator         it2;
 
     Timer                               timer;
@@ -309,13 +302,13 @@ run_benchmark (int pN)
     table                               results;
     table                               bucketInfo;
 #ifdef AG_DBG_MODE
-    table       agMetrics;
+    table                               agMetrics;
+    uint64_t                            memUsed;
 #endif
 
     int32_t                             flag;
     int32_t                             cntr;
 
-    uint64_t                            memUsed;
 
     if (pN > maxN) {
         std::cout << "\nGiven " << format_integer (pN) << " operations exceeds the number of records supplied by the file\n";
