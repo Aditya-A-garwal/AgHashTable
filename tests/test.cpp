@@ -103,11 +103,11 @@ TEST (Smoke, SmokeTest)
 TEST (Insert, singleAggregateSingleNode)
 {
     AgHashTable<int64_t, mod2<int64_t>>     table;
-    uint64_t                                bucketCountInit;
+    int64_t                                 bucketCountInit;
 
     ASSERT_TRUE (table.initialized ());
 
-    bucketCountInit     = table.get_bucket_count ();
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
 
     // insert 0 (hash=0, position=0) and check if the insertion was successful and table key counts are consistent
     // the key count in the first bucket should now be 1 (a new aggregate node should have been created for this key)
@@ -119,14 +119,14 @@ TEST (Insert, singleAggregateSingleNode)
     EXPECT_EQ (table.get_resize_count (), 0);
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
-    bucketCountInit     = table.get_bucket_count ();
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
 
     // make sure the first bucket has the key
     ASSERT_EQ (table.get_bucket_key_count (0), 1);
     ASSERT_EQ (table.get_bucket_hash_count (0), 1);
 
     // make sure no other bucket has any other keys
-    for (uint64_t bucket = 1; bucket < bucketCountInit; ++bucket) {
+    for (int64_t bucket = 1; bucket < bucketCountInit; ++bucket) {
         ASSERT_EQ (table.get_bucket_key_count (bucket), 0);
         ASSERT_EQ (table.get_bucket_hash_count (bucket), 0);
     }
@@ -141,14 +141,14 @@ TEST (Insert, singleAggregateSingleNode)
     EXPECT_EQ (table.get_resize_count (), 0);
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
-    bucketCountInit     = table.get_bucket_count ();
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
 
     // make sure the first bucket has the key
     ASSERT_EQ (table.get_bucket_key_count (1), 1);
     ASSERT_EQ (table.get_bucket_hash_count (1), 1);
 
     // make sure no other bucket has any other keys
-    for (uint64_t bucket = 2; bucket < bucketCountInit; ++bucket) {
+    for (int64_t bucket = 2; bucket < bucketCountInit; ++bucket) {
         ASSERT_EQ (table.get_bucket_key_count (bucket), 0);
         ASSERT_EQ (table.get_bucket_hash_count (bucket), 0);
     }
@@ -161,11 +161,11 @@ TEST (Insert, singleAggregateSingleNode)
 TEST (Insert, singleAggregateMultiNode)
 {
     AgHashTable<int64_t, mod2<int64_t>>     table;
-    uint64_t                                bucketCountInit;
+    int64_t                                 bucketCountInit;
 
     ASSERT_TRUE (table.initialized ());
 
-    bucketCountInit     = table.get_bucket_count ();
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
 
     // insert 0 (hash=0, position=0) and check if the insertion was successful and table key counts are consistent
     // the key count in the first bucket should now be 1 (a new aggregate node should have been created for this key)
@@ -183,14 +183,14 @@ TEST (Insert, singleAggregateMultiNode)
     EXPECT_EQ (table.get_resize_count (), 0);
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
-    bucketCountInit     = table.get_bucket_count ();
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
 
     // make sure the first bucket has the newly inserted keys
     ASSERT_EQ (table.get_bucket_key_count (0), 2);
     ASSERT_EQ (table.get_bucket_hash_count (0), 1);
 
     // make sure no other buckets have any keys
-    for (uint64_t bucket = 1; bucket < bucketCountInit; ++bucket) {
+    for (int64_t bucket = 1; bucket < bucketCountInit; ++bucket) {
         ASSERT_EQ (table.get_bucket_key_count (bucket), 0);
         ASSERT_EQ (table.get_bucket_hash_count (bucket), 0);
     }
@@ -211,14 +211,14 @@ TEST (Insert, singleAggregateMultiNode)
     EXPECT_EQ (table.get_resize_count (), 0);
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
-    bucketCountInit     = table.get_bucket_count ();
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
 
     // make sure the second bucket has newly inserted keys
     ASSERT_EQ (table.get_bucket_key_count (1), 2);
     ASSERT_EQ (table.get_bucket_hash_count (1), 1);
 
     // make sure no other buckets have any keys
-    for (uint64_t bucket = 2; bucket < bucketCountInit; ++bucket) {
+    for (int64_t bucket = 2; bucket < bucketCountInit; ++bucket) {
         ASSERT_EQ (table.get_bucket_key_count (bucket), 0);
         ASSERT_EQ (table.get_bucket_hash_count (bucket), 0);
     }
@@ -231,12 +231,12 @@ TEST (Insert, singleAggregateMultiNode)
 TEST (Insert, multiAggregateMultiNode)
 {
     AgHashTable<int64_t, abs<int64_t>>      table;
-    uint64_t                                bucketCountInit;
-    uint64_t                                resizeCountInit;
+    int64_t                                 bucketCountInit;
+    int64_t                                 resizeCountInit;
 
     ASSERT_TRUE (table.initialized ());
 
-    bucketCountInit     = table.get_bucket_count ();
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
 
     // insert 1 (hash=1, position=1) and check if the insertion was successful and table key counts are consistent
     // the key count in the first bucket should now be 1 (a new aggregate node should have been created for this key)
@@ -266,11 +266,11 @@ TEST (Insert, multiAggregateMultiNode)
     EXPECT_EQ (table.get_resize_count (), 0);
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
-    bucketCountInit     = table.get_bucket_count ();
-    resizeCountInit     = table.get_resize_count ();
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
+    resizeCountInit     = (int64_t)table.get_resize_count ();
 
     // make sure that only the second and third buckets have all the keys
-    for (uint64_t bucket = 0; bucket < bucketCountInit; ++bucket) {
+    for (int64_t bucket = 0; bucket < bucketCountInit; ++bucket) {
         if (bucket == 1 || bucket == 2) {
             ASSERT_EQ (table.get_bucket_key_count (bucket), 2);
             ASSERT_EQ (table.get_bucket_hash_count (bucket), 1);
@@ -312,7 +312,7 @@ TEST (Insert, multiAggregateMultiNode)
     bucketCountInit     = table.get_bucket_count ();
 
     // make sure that only the second and third buckets have all the keys
-    for (uint64_t bucket = 0; bucket < bucketCountInit; ++bucket) {
+    for (int64_t bucket = 0; bucket < bucketCountInit; ++bucket) {
         if (bucket == 1 || bucket == 2) {
             ASSERT_EQ (table.get_bucket_key_count (bucket), 4);
             ASSERT_EQ (table.get_bucket_hash_count (bucket), 2);
