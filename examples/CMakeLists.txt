@@ -49,7 +49,7 @@ macro (set_lib_links)
         )
 
         target_link_libraries (
-            array_frequency
+            array_distinct
             pthread
         )
 
@@ -79,11 +79,6 @@ add_executable (
 add_executable (
     array_distinct
     array_distinct.cpp
-)
-
-target_link_libraries (
-    array_distinct
-    pthread
 )
 
 add_executable (
