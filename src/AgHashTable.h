@@ -178,39 +178,39 @@ class AgHashTable {
 
     //  Getters
 
-    bool                initialized         () const;
+    bool                initialized             () const;
 
-    uint64_t            size                () const;
-    uint64_t            getKeyCount         () const;
+    uint64_t            size                    () const;
+    uint64_t            get_key_count           () const;
 
-    uint64_t            getBucketCount      () const;
-    uint64_t            getMaxBucketCount   () const;
+    uint64_t            get_bucket_count        () const;
+    uint64_t            get_max_bucket_count    () const;
 
-    uint64_t            getBucketKeyCount   (const uint64_t &pBucketId) const;
-    uint64_t            getBucketHashCount  (const uint64_t &pBucketId) const;
+    uint64_t            get_bucket_key_count    (const uint64_t &pBucketId) const;
+    uint64_t            get_bucket_hash_count   (const uint64_t &pBucketId) const;
 
     // Testing and debugging
 
     DBG_MODE (
-    uint64_t            getAllocAmount      () const;
-    uint64_t            getAllocCount       () const;
-    uint64_t            getDeleteCount      () const;
+    uint64_t            get_alloc_amount        () const;
+    uint64_t            get_alloc_count         () const;
+    uint64_t            get_delete_count        () const;
 
-    uint64_t            getResizeCount      () const;
+    uint64_t            get_resize_count        () const;
     )
 
-    iterator            find                (const key_t &pKey) const;
-    bool                exists              (const key_t &pkey) const;
+    iterator            find                    (const key_t &pKey) const;
+    bool                exists                  (const key_t &pkey) const;
 
     //  Modifiers
 
-    bool                insert              (const key_t &pKey);
-    bool                erase               (const key_t &pKey);
+    bool                insert                  (const key_t &pKey);
+    bool                erase                   (const key_t &pKey);
 
     // Iterators and Iteration
 
-    iterator            begin               () const;
-    iterator            end                 () const;
+    iterator            begin                   () const;
+    iterator            end                     () const;
 
 
 
@@ -220,21 +220,21 @@ class AgHashTable {
 
     // Getters
 
-    iterator            find_util           (const key_t &pKey, aggr_ptr_t pAggrElem) const;
-    bool                exists_util         (const key_t &pKey, node_ptr_t pListElem) const;
+    iterator            find_util               (const key_t &pKey, aggr_ptr_t pAggrElem) const;
+    bool                exists_util             (const key_t &pKey, node_ptr_t pListElem) const;
 
     // Modifiers
 
-    void                init                ();
+    void                init                    ();
 
-    bool                insert_util         (const key_t &pKey, node_ptr_t *pListElem);
-    bool                erase_util          (const key_t &pKey, node_ptr_t *pListElem);
+    bool                insert_util             (const key_t &pKey, node_ptr_t *pListElem);
+    bool                erase_util              (const key_t &pKey, node_ptr_t *pListElem);
 
-    bool                resize              (const uint64_t &pNumBuckets);
+    bool                resize                  (const uint64_t &pNumBuckets);
 
     // Iterators
 
-    aggr_ptr_t  getHashAggr                 (const hash_t &pKeyHash) const;
+    aggr_ptr_t  getHashAggr                     (const hash_t &pKeyHash) const;
 
 
     bucket_ptr_t        mBucketArray;
@@ -360,7 +360,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::initialized () const
 }
 
 /**
- * @brief                   Returns the number of keys in the hash table (identical to getKeyCount())
+ * @brief                   Returns the number of keys in the hash table (identical to get_key_count())
  *
  * @return uint64_t         Number of keys in the hash table
  */
@@ -378,7 +378,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::size () const
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, tHashFunc, tEquals>::getKeyCount () const
+AgHashTable<key_t, tHashFunc, tEquals>::get_key_count () const
 {
     return mKeyCount;
 }
@@ -390,7 +390,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::getKeyCount () const
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, tHashFunc, tEquals>::getBucketCount () const
+AgHashTable<key_t, tHashFunc, tEquals>::get_bucket_count () const
 {
     return mBucketCount;
 }
@@ -402,7 +402,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::getBucketCount () const
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, tHashFunc, tEquals>::getMaxBucketCount () const
+AgHashTable<key_t, tHashFunc, tEquals>::get_max_bucket_count () const
 {
     return sMaxBucketsAllowed;
 }
@@ -416,7 +416,7 @@ DBG_MODE (
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, tHashFunc, tEquals>::getAllocAmount () const
+AgHashTable<key_t, tHashFunc, tEquals>::get_alloc_amount () const
 {
     return mAllocAmt;
 }
@@ -428,7 +428,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::getAllocAmount () const
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, tHashFunc, tEquals>::getAllocCount () const
+AgHashTable<key_t, tHashFunc, tEquals>::get_alloc_count () const
 {
     return mAllocCnt;
 }
@@ -440,7 +440,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::getAllocCount () const
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, tHashFunc, tEquals>::getDeleteCount () const
+AgHashTable<key_t, tHashFunc, tEquals>::get_delete_count () const
 {
     return mDeleteCnt;
 }
@@ -452,7 +452,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::getDeleteCount () const
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable <key_t, tHashFunc, tEquals>::getResizeCount () const
+AgHashTable <key_t, tHashFunc, tEquals>::get_resize_count () const
 {
     return mResizeCnt;
 }
@@ -468,7 +468,7 @@ AgHashTable <key_t, tHashFunc, tEquals>::getResizeCount () const
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, tHashFunc, tEquals>::getBucketKeyCount (const uint64_t &pBucketId) const
+AgHashTable<key_t, tHashFunc, tEquals>::get_bucket_key_count (const uint64_t &pBucketId) const
 {
     return (pBucketId < mBucketCount) ? (mBucketArray[pBucketId].keyCount) : (0ULL);
 }
@@ -482,7 +482,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::getBucketKeyCount (const uint64_t &pBuck
  */
 template <typename key_t, auto tHashFunc, auto tEquals>
 uint64_t
-AgHashTable<key_t, tHashFunc, tEquals>::getBucketHashCount (const uint64_t &pBucketId) const
+AgHashTable<key_t, tHashFunc, tEquals>::get_bucket_hash_count (const uint64_t &pBucketId) const
 {
     return (pBucketId < mBucketCount) ? (mBucketArray[pBucketId].distinctHashCount) : (0ULL);
 }

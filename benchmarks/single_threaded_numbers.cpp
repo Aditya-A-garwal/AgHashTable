@@ -445,13 +445,13 @@ run_benchmark (int pN)
     results.add_row ({"Find", "AgHashTable", format_integer (cntr), format_integer (measured)});
 
 #if defined (AG_DBG_MODE)
-    memUsed     = table2.getAllocAmount ();
+    memUsed     = table2.get_alloc_amount ();
 #endif
 
     bucketInfo.add_headers ({"Bucket", "Key Count", "Unique Hash Count"});
 
-    for (uint64_t i = 0; i < table2.getBucketCount (); ++i) {
-        bucketInfo.add_row ({format_integer (i), format_integer (table2.getBucketKeyCount (i)), format_integer (table2.getBucketHashCount (i))});
+    for (uint64_t i = 0; i < table2.get_bucket_count (); ++i) {
+        bucketInfo.add_row ({format_integer (i), format_integer (table2.get_bucket_key_count (i)), format_integer (table2.get_bucket_hash_count (i))});
     }
 
 
@@ -496,11 +496,11 @@ run_benchmark (int pN)
 #if defined (AG_DBG_MODE)
 
     agMetrics.add_headers ({"Metric", "Count", "Unit"});
-    agMetrics.add_row ({"Allocations", format_integer (table2.getAllocCount ()), "-"});
-    agMetrics.add_row ({"Frees", format_integer (table2.getDeleteCount ()), "-"});
+    agMetrics.add_row ({"Allocations", format_integer (table2.get_alloc_count ()), "-"});
+    agMetrics.add_row ({"Frees", format_integer (table2.get_delete_count ()), "-"});
     agMetrics.add_row ({"Memory Allocated", format_integer (memUsed), "bytes"});
-    agMetrics.add_row ({"Buckets", format_integer (table2.getBucketCount ()), "-"});
-    agMetrics.add_row ({"Resizes", format_integer (table2.getResizeCount ()), "-"});
+    agMetrics.add_row ({"Buckets", format_integer (table2.get_bucket_count ()), "-"});
+    agMetrics.add_row ({"Resizes", format_integer (table2.get_resize_count ()), "-"});
 
     std::cout << agMetrics << '\n';
 

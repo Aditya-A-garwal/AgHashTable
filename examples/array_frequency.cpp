@@ -43,10 +43,10 @@ main (void)
 
     std::cout << "Time elapsed: " << (chrono::duration_cast<chrono::milliseconds>(end - start).count ()) << "us \n";
 #if defined (AG_DBG_MODE)
-    std::cout << "Allocations: " << table.getAllocCount () << '\n';
-    std::cout << "Deletions: " << table.getDeleteCount () << '\n';
-    std::cout << "Allocation amount: " << table.getAllocAmount () << '\n';
-    std::cout << "Resizes: " << table.getResizeCount () << '\n';
+    std::cout << "Allocations: " << table.get_alloc_count () << '\n';
+    std::cout << "Deletions: " << table.get_delete_count () << '\n';
+    std::cout << "Allocation amount: " << table.get_alloc_amount () << '\n';
+    std::cout << "Resizes: " << table.get_resize_count () << '\n';
 #endif
 
     return 0;

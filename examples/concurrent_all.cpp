@@ -214,8 +214,8 @@ main (void)
 
     std::cout << "Time elapsed: " << (chrono::duration_cast<chrono::milliseconds>(end - start).count ()) << "us \n";
 #if defined (AG_DBG_MODE)
-    std::cout << "Allocations: " << table.getAllocCount () << '\n';
-    std::cout << "Allocation amount: " << table.getAllocAmount () << '\n';
+    std::cout << "Allocations: " << table.get_alloc_count () << '\n';
+    std::cout << "Allocation amount: " << table.get_alloc_amount () << '\n';
 #endif
 
     return 0;
