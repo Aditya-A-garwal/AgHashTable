@@ -28,14 +28,40 @@ macro (set_flags)
 
 endmacro ()
 
+macro (set_lib_links)
+
+    if (NOT WIN32 OR MINGW)
+        target_link_libraries (
+            emails
+            pthread
+        )
+
+        target_link_libraries (
+            concurrent_all
+            pthread
+        )
+
+        target_link_libraries (
+            concurrent_all_threadpool
+            pthread
+        )
+
+        target_link_libraries (
+            array_frequency
+            pthread
+        )
+
+        target_link_libraries (
+            array_frequency
+            pthread
+    )
+    endif ()
+
+endmacro ()
+
 add_executable (
     emails
     emails.cpp
-)
-
-target_link_libraries (
-    emails
-    pthread
 )
 
 add_executable (
@@ -43,19 +69,9 @@ add_executable (
     concurrent_all.cpp
 )
 
-target_link_libraries (
-    concurrent_all
-    pthread
-)
-
 add_executable (
     concurrent_all_threadpool
     concurrent_all_threadpool.cpp
-)
-
-target_link_libraries (
-    concurrent_all_threadpool
-    pthread
 )
 
 add_executable (
@@ -73,9 +89,5 @@ add_executable (
     array_frequency.cpp
 )
 
-target_link_libraries (
-    array_frequency
-    pthread
-)
-
+set_lib_links ()
 set_flags ()
