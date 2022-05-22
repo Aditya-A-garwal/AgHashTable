@@ -1,13 +1,46 @@
-//! collect more data on aggregagte nodes
-//! test allocations as well
-//! it should be possible to manually specify the bitness of the hash function
-
 #include <gtest/gtest.h>
 #include <type_traits>
 #include <limits>
 
 #define AG_DBG_MODE
+// #define AG_PRINT_INIT_INFO
 #include "AgHashTable.h"
+
+/**
+ * @brief                   Returns a number modulo 2
+ *
+ * @tparam int_t            Type of number being supplied
+ *
+ * @param pKey              Number whose modulo 2 is to be found
+ *
+ * @return uint8_t          The supplied number modulo 2
+ */
+template <typename int_t>
+uint8_t
+mod2 (const int_t *pKey)
+{
+    int_t   val = *pKey;
+
+    val     = (val < 0) ? (-val) : (val);
+
+    return val & 0b1;
+}
+
+/**
+ * @brief
+ *
+ * @tparam uint_t
+ *
+ * @param pKey
+ *
+ * @return uint64_t
+ */
+template <typename uint_t>
+uint64_t
+unsigned_integer_identity (const uint_t *pKey)
+{
+    return *pKey;
+}
 
 /**
  * @brief
@@ -16,13 +49,13 @@
  *
  * @param pKey
  *
- * @return uint8_t
+ * @return uint64_t
  */
 template <typename int_t>
-uint8_t
-is_odd (const int_t *pKey)
+uint64_t
+abs (const int_t *pKey)
 {
-    return (uint8_t)((*pKey) & 1);
+    return (*pKey < 0) ? (-(*pKey)) : (*pKey);
 }
 
 /**
@@ -69,22 +102,24 @@ TEST (Smoke, SmokeTest)
  */
 TEST (Insert, singleAggregateSingleNode)
 {
-    AgHashTable<int64_t, is_odd<int64_t>>   table;
+    AgHashTable<int64_t, mod2<int64_t>>     table;
     uint64_t                                bucketCountInit;
 
     ASSERT_TRUE (table.initialized ());
 
     bucketCountInit     = table.get_bucket_count ();
 
-    // insert 0 (hash=0) and check if the insertion was successful and table key counts are consistent
+    // insert 0 (hash=0, position=0) and check if the insertion was successful and table key counts are consistent
     // the key count in the first bucket should now be 1 (a new aggregate node should have been created for this key)
     ASSERT_TRUE (table.insert (0));
     ASSERT_EQ (table.size (), 1);
-    ASSERT_EQ (table.get_key_count (), 1);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
 
-    // make sure the table has not been resized unecessarily
-    ASSERT_EQ (table.get_resize_count (), 0);
-    ASSERT_EQ (table.get_bucket_count (), bucketCountInit);
+    // the table should not have been resized, but it's okay if it was
+    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
+
+    bucketCountInit     = table.get_bucket_count ();
 
     // make sure the first bucket has the key
     ASSERT_EQ (table.get_bucket_key_count (0), 1);
@@ -96,15 +131,17 @@ TEST (Insert, singleAggregateSingleNode)
         ASSERT_EQ (table.get_bucket_hash_count (bucket), 0);
     }
 
-    // insert 0 (hash=0) and check if the insertion was successful and table key counts are consistent
+    // insert 0 (hash=0, position=0) and check if the insertion was successful and table key counts are consistent
     // the key count in the first bucket should now be 1 (a new aggregate node should have been created for this key)
     ASSERT_TRUE (table.insert (1));
     ASSERT_EQ (table.size (), 2);
-    ASSERT_EQ (table.get_key_count (), 2);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
 
-    // make sure the table has not been resized unecessarily
-    ASSERT_EQ (table.get_resize_count (), 0);
-    ASSERT_EQ (table.get_bucket_count (), bucketCountInit);
+    // the table should not have been resized, but it's okay if it was
+    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
+
+    bucketCountInit     = table.get_bucket_count ();
 
     // make sure the first bucket has the key
     ASSERT_EQ (table.get_bucket_key_count (1), 1);
@@ -123,28 +160,30 @@ TEST (Insert, singleAggregateSingleNode)
  */
 TEST (Insert, singleAggregateMultiNode)
 {
-    AgHashTable<int64_t, is_odd<int64_t>>   table;
+    AgHashTable<int64_t, mod2<int64_t>>     table;
     uint64_t                                bucketCountInit;
 
     ASSERT_TRUE (table.initialized ());
 
     bucketCountInit     = table.get_bucket_count ();
 
-    // insert 0 (hash=0) and check if the insertion was successful and table key counts are consistent
+    // insert 0 (hash=0, position=0) and check if the insertion was successful and table key counts are consistent
     // the key count in the first bucket should now be 1 (a new aggregate node should have been created for this key)
     ASSERT_TRUE (table.insert (0));
     ASSERT_EQ (table.size (), 1);
-    ASSERT_EQ (table.get_key_count (), 1);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
 
-    // insert 2 (hash=0) and check if the insertion was successful and table key counts are consistent
+    // insert 2 (hash=0, position=0) and check if the insertion was successful and table key counts are consistent
     // the key count in the first bucket should now be 2 (no new aggregate node should have been created for this key)
     ASSERT_TRUE (table.insert (2));
     ASSERT_EQ (table.size (), 2);
-    ASSERT_EQ (table.get_key_count (), 2);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
 
-    // make sure that the table was not resized unecessarily
-    ASSERT_EQ (table.get_resize_count (), 0);
-    ASSERT_EQ (table.get_bucket_count (), bucketCountInit);
+    // the table should not have been resized, but it's okay if it was
+    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
+
+    bucketCountInit     = table.get_bucket_count ();
 
     // make sure the first bucket has the newly inserted keys
     ASSERT_EQ (table.get_bucket_key_count (0), 2);
@@ -156,21 +195,23 @@ TEST (Insert, singleAggregateMultiNode)
         ASSERT_EQ (table.get_bucket_hash_count (bucket), 0);
     }
 
-    // insert 1 (hash=1) and check if the insertion was successful and table key counts are consistent
+    // insert 1 (hash=1, position=1) and check if the insertion was successful and table key counts are consistent
     // the key count in the second bucket should now be 1 (a new aggreagte node should have been created for this key)
     ASSERT_TRUE (table.insert (1));
     ASSERT_EQ (table.size (), 3);
-    ASSERT_EQ (table.get_key_count (), 3);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
 
-    // Insert 3 (hash=1) and check if the insertion was successful and table key counts are consistent
+    // Insert 3 (hash=1, position=1) and check if the insertion was successful and table key counts are consistent
     // the kkey count in the second bucket should now be 2 (no new aggregate node should have been created for this key)
     ASSERT_TRUE (table.insert (3));
     ASSERT_EQ (table.size (), 4);
-    ASSERT_EQ (table.get_key_count (), 4);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
 
-    // make sure that the table was not resized unecessarily
-    ASSERT_EQ (table.get_resize_count (), 0);
-    ASSERT_EQ (table.get_bucket_count (), bucketCountInit);
+    // the table should not have been resized, but it's okay if it was
+    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
+
+    bucketCountInit     = table.get_bucket_count ();
 
     // make sure the second bucket has newly inserted keys
     ASSERT_EQ (table.get_bucket_key_count (1), 2);
@@ -189,5 +230,96 @@ TEST (Insert, singleAggregateMultiNode)
  */
 TEST (Insert, multiAggregateMultiNode)
 {
+    AgHashTable<int64_t, abs<int64_t>>      table;
+    uint64_t                                bucketCountInit;
+    uint64_t                                resizeCountInit;
 
+    ASSERT_TRUE (table.initialized ());
+
+    bucketCountInit     = table.get_bucket_count ();
+
+    // insert 1 (hash=1, position=1) and check if the insertion was successful and table key counts are consistent
+    // the key count in the first bucket should now be 1 (a new aggregate node should have been created for this key)
+    ASSERT_TRUE (table.insert (1));
+    ASSERT_EQ (table.size (), 1);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
+
+    // insert 2 (hash=2, position=2) and check if the insertion was successful and table key counts are consistent
+    // the key count in the first bucket should now be 2 (a new aggregate node should have been created for this key)
+    ASSERT_TRUE (table.insert (2));
+    ASSERT_EQ (table.size (), 2);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
+
+    // insert -1 (hash=1, position=1) and check if the insertion was successful and table key counts are consistent
+    // the key count in the first bucket should now be 1 (no new aggregate node should have been created for this key)
+    ASSERT_TRUE (table.insert (-1));
+    ASSERT_EQ (table.size (), 3);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
+
+    // insert -2 (hash=2, position=2) and check if the insertion was successful and table key counts are consistent
+    // the key count in the first bucket should now be 2 (no new aggregate node should have been created for this key)
+    ASSERT_TRUE (table.insert (-2));
+    ASSERT_EQ (table.size (), 4);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
+
+    // the table should not have been resized, but it's okay if it was
+    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
+
+    bucketCountInit     = table.get_bucket_count ();
+    resizeCountInit     = table.get_resize_count ();
+
+    // make sure that only the second and third buckets have all the keys
+    for (uint64_t bucket = 0; bucket < bucketCountInit; ++bucket) {
+        if (bucket == 1 || bucket == 2) {
+            ASSERT_EQ (table.get_bucket_key_count (bucket), 2);
+            ASSERT_EQ (table.get_bucket_hash_count (bucket), 1);
+        }
+        else {
+            ASSERT_EQ (table.get_bucket_key_count (bucket), 0);
+            ASSERT_EQ (table.get_bucket_hash_count (bucket), 0);
+        }
+    }
+
+    // insert 1 + bucket count (hash=1 + bucket count, position=1) and check if the insertion was successful and table key counts are consistent
+    // the key count in the first bucket should now be 1 (a new aggregate node should have been created for this key)
+    ASSERT_TRUE (table.insert (1 + bucketCountInit));
+    ASSERT_EQ (table.size (), 5);
+    ASSERT_EQ (table.get_aggregate_count (), 3);
+
+    // insert 2 + bucket count (hash=2 + bucket count, position=2) and check if the insertion was successful and table key counts are consistent
+    // the key count in the first bucket should now be 2 (a new aggregate node should have been created for this key)
+    ASSERT_TRUE (table.insert (2 + bucketCountInit));
+    ASSERT_EQ (table.size (), 6);
+    ASSERT_EQ (table.get_aggregate_count (), 4);
+
+    // insert -(1 + bucket count) (hash=1 + bucket count, position=1) and check if the insertion was successful and table key counts are consistent
+    // the key count in the first bucket should now be 1 (no new aggregate node should have been created for this key)
+    ASSERT_TRUE (table.insert (-(1 + bucketCountInit)));
+    ASSERT_EQ (table.size (), 7);
+    ASSERT_EQ (table.get_aggregate_count (), 4);
+
+    // insert -(2 + bucket count) (hash=2 + bucket count, position=2) and check if the insertion was successful and table key counts are consistent
+    // the key count in the first bucket should now be 2 (no new aggregate node should have been created for this key)
+    ASSERT_TRUE (table.insert (-(2 + bucketCountInit)));
+    ASSERT_EQ (table.size (), 8);
+    ASSERT_EQ (table.get_aggregate_count (), 4);
+
+    // make sure that the table was not resized
+    ASSERT_EQ (table.get_resize_count (), resizeCountInit);
+    ASSERT_EQ (table.get_bucket_count (), bucketCountInit);
+
+    bucketCountInit     = table.get_bucket_count ();
+
+    // make sure that only the second and third buckets have all the keys
+    for (uint64_t bucket = 0; bucket < bucketCountInit; ++bucket) {
+        if (bucket == 1 || bucket == 2) {
+            ASSERT_EQ (table.get_bucket_key_count (bucket), 4);
+            ASSERT_EQ (table.get_bucket_hash_count (bucket), 2);
+        }
+        else {
+            ASSERT_EQ (table.get_bucket_key_count (bucket), 0);
+            ASSERT_EQ (table.get_bucket_hash_count (bucket), 0);
+        }
+    }
 }
