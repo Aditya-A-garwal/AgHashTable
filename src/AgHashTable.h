@@ -133,7 +133,6 @@ class AgHashTable {
 
     //! URGENT This can not be more than pow (2, sHashBitness * 8), make sure to handle the case when sHashBitness = 8, as that would cause a left shift overflow
     static constexpr uint64_t   sMaxBucketsAllowed      = 1ULL << 24;                   /** Maxmimum number of buckets allowed in the hash table */
-    // static constexpr uint64_t   sMaxBucketsAllowed      = 256;                             /** Maxmimum number of buckets allowed in the hash table */
 
 
 
@@ -240,23 +239,23 @@ class AgHashTable {
     aggr_ptr_t  getHashAggr                     (const hash_t &pKeyHash) const;
 
 
-    bucket_ptr_t        mBucketArray;
+    bucket_ptr_t        mBucketArray;                                       /** Pointer to array of buckets, each containing a linked list of aggregate nodes */
 
     MULTITHREADED_MODE (
-    std::shared_mutex   *mLocks;
+    std::shared_mutex   *mLocks;                                            /** Pointer to array of locks */
     )
 
-    uint64_t            mKeyCount       {0ULL};
-    uint64_t            mBucketCount    {64ULL};
+    uint64_t            mKeyCount       {0ULL};                             /** Number of keys in the table */
+    uint64_t            mBucketCount    {64ULL};                            /** Number of buckets in the table */
 
     DBG_MODE (
-    uint64_t            mAllocAmt       {0ULL};
-    uint64_t            mAllocCnt       {0ULL};
-    uint64_t            mDeleteCnt      {0ULL};
+    uint64_t            mAllocAmt       {0ULL};                             /** Number of bytes allocated by the hash table (does not count allocations done by keys internally) */
+    uint64_t            mAllocCnt       {0ULL};                             /** Number of times operator new/malloc has been used to perform a new allocation (does not count allocations done by keys internally) */
+    uint64_t            mDeleteCnt      {0ULL};                             /** Number of times operator delete/free has been used to free up memory (does not count frees done by keys internally) */
 
-    uint64_t            mResizeCnt      {0ULL};
+    uint64_t            mResizeCnt      {0ULL};                             /** Number of times the bucket array of the table has been resized (expanded, specifically) */
 
-    uint64_t            mAggregateCnt   {0ULL};
+    uint64_t            mAggregateCnt   {0ULL};                             /** Number of aggregate nodes in the table (=number of distinct hash values in the table) */
     )
 
 };
