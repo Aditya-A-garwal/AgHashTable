@@ -735,7 +735,7 @@ AgHashTable<key_t, tHashFunc, tEquals>::erase (const key_t &pKey)
 
                     --mBucketArray[bucketId].distinctHashCount;
                     DBG_MODE (
-                    ++mAggregateCnt;
+                    --mAggregateCnt;
                     )
 
                     // take the node out and put it's successor in it's place
