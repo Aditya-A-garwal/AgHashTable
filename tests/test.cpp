@@ -1,7 +1,10 @@
-//! test allocations as well
-//! it should be possible to manually specify the bitness of the hash function
-//! add methods to check the shape of the bucket in debug mode (get the bucket in which an element lies, get the number of colliding elements with the same hash, etc.)
-//! add docs for member variables of AgHashTable class
+/**
+ * @file            test.cpp
+ * @author          Aditya Agarwal (aditya.agarwal@dumblebots.com)
+ *
+ * @brief           Unit tests for AgHashTable class
+ *
+ */
 
 #include <gtest/gtest.h>
 #include <type_traits>
@@ -344,6 +347,10 @@ TEST (Insert, multiAggregateMultiNode)
     }
 }
 
+/**
+ * @brief                   Test Erasing duplicate elements
+ *
+ */
 TEST (Erase, duplicates)
 {
     AgHashTable<int64_t>                    table;
