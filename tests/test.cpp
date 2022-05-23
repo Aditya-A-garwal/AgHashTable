@@ -1,3 +1,8 @@
+//! test allocations as well
+//! it should be possible to manually specify the bitness of the hash function
+//! add methods to check the shape of the bucket in debug mode (get the bucket in which an element lies, get the number of colliding elements with the same hash, etc.)
+//! add docs for member variables of AgHashTable class
+
 #include <gtest/gtest.h>
 #include <type_traits>
 #include <limits>
@@ -7,56 +12,55 @@
 #include "AgHashTable.h"
 
 /**
- * @brief                   Returns a number modulo 2
+ * @brief                   Returns the absoulute value of an integer
  *
- * @tparam int_t            Type of number being supplied
+ * @tparam int_t            Type of integer being supplied
  *
- * @param pKey              Number whose modulo 2 is to be found
+ * @param pKey              Pointer to the integer to get the absoulute value of
  *
- * @return uint8_t          The supplied number modulo 2
+ * @return uint64_t         Absoulute value of the given number
  */
 template <typename int_t>
-uint8_t
-mod2 (const int_t *pKey)
-{
-    int_t   val = *pKey;
-
-    val     = (val < 0) ? (-val) : (val);
-
-    return val & 0b1;
-}
-
-/**
- * @brief
- *
- * @tparam uint_t
- *
- * @param pKey
- *
- * @return uint64_t
- */
-template <typename uint_t>
-uint64_t
-unsigned_integer_identity (const uint_t *pKey)
-{
-    return *pKey;
-}
-
-/**
- * @brief
- *
- * @tparam int_t
- *
- * @param pKey
- *
- * @return uint64_t
- */
-template <typename int_t>
-uint64_t
+inline uint64_t
 abs (const int_t *pKey)
 {
     return (*pKey < 0) ? (-(*pKey)) : (*pKey);
 }
+
+/**
+ * @brief                   Returns an integer modulo 2
+ *
+ * @tparam int_t            Type of integer being supplied
+ *
+ * @param pKey              Pointer to the integer whose modulo 2 is to be found
+ *
+ * @return uint8_t          Modulo 2 of the suppliec integer
+ */
+template <typename int_t>
+inline uint8_t
+mod2 (const int_t *pKey)
+{
+    return abs (pKey) & 1;
+}
+
+/**
+ * @brief                   Returns an unsigned integer of any bitness as a an unsigned 64 bit integer
+ *
+ *                          Undefined behaviour if a signed integer is supplied
+ *
+ * @tparam uint_t           Type of unsigned integer begin supplied
+ *
+ * @param pKey              Pointer to the integer whose modulo 2 is to be found
+ *
+ * @return uint64_t         Given number as an unsigned 64 bit integer
+ */
+template <typename uint_t>
+inline uint64_t
+unsigned_identity (const uint_t *pKey)
+{
+    return (uint64_t)*pKey;
+}
+
 
 /**
  * @brief                   Smoke test
@@ -94,6 +98,22 @@ TEST (Smoke, SmokeTest)
     }
 
     ASSERT_LE (table.get_bucket_count (), table.get_max_bucket_count ());
+}
+
+/**
+ * @brief                   Test inserting duplicate elements
+ *
+ */
+TEST (Insert, duplicates)
+{
+    AgHashTable<int64_t>                    table;
+
+    ASSERT_TRUE (table.insert (0));
+    ASSERT_FALSE (table.insert (0));
+
+    ASSERT_EQ (table.size (), 1);
+    ASSERT_EQ (table.get_key_count (), 1);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
 }
 
 /**
@@ -322,4 +342,29 @@ TEST (Insert, multiAggregateMultiNode)
             ASSERT_EQ (table.get_bucket_hash_count (bucket), 0);
         }
     }
+}
+
+TEST (Erase, duplicates)
+{
+    AgHashTable<int64_t>                    table;
+
+    // make sure that a non-existent key is not erased from the table
+    ASSERT_FALSE (table.erase (0));
+    ASSERT_EQ (table.size (), 0);
+    ASSERT_EQ (table.get_aggregate_count (), 0);
+
+    // insert 0 into the table and make sure all key counts are consistent
+    ASSERT_TRUE (table.insert (0));
+    ASSERT_EQ (table.size (), 1);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
+
+    // erasing 0 from the table should be successful and all key counts should be consistent
+    ASSERT_TRUE (table.erase (0));
+    ASSERT_EQ (table.size (), 0);
+    ASSERT_EQ (table.get_aggregate_count (), 0);
+
+    // a non existant key should not be erased from the table
+    ASSERT_FALSE (table.erase (0));
+    ASSERT_EQ (table.size (), 0);
+    ASSERT_EQ (table.get_aggregate_count (), 0);
 }
