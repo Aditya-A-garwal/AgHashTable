@@ -120,7 +120,7 @@ TEST (Insert, duplicates)
 }
 
 /**
- * @brief                   Test Insertion with one aggregate node per bucket and one node per aggregate node (no collisions)
+ * @brief                   Test Insertion with one aggregate node (per bucket, not for all buckets) and one node per aggregate node (no collisions)
  *
  */
 TEST (Insert, singleAggregateSingleNode)
@@ -178,7 +178,7 @@ TEST (Insert, singleAggregateSingleNode)
 }
 
 /**
- * @brief                   Test insertion with one aggregate node per bucket but multiple nodes per aggregate node (collisions)
+ * @brief                   Test insertion with one aggregate node (per bucket, not for all buckets) but multiple nodes per aggregate node (collisions)
  *
  */
 TEST (Insert, singleAggregateMultiNode)
@@ -375,3 +375,55 @@ TEST (Erase, duplicates)
     ASSERT_EQ (table.size (), 0);
     ASSERT_EQ (table.get_aggregate_count (), 0);
 }
+
+
+/**
+ * @brief                   Test deletion with one aggregate node (per bucket, not for all buckets) and one node per aggregate node (no collisions)
+ *
+ */
+TEST (Erase, singleAggregateSingleNode)
+{
+    AgHashTable<int64_t, mod2<int64_t>>     table;
+
+    ASSERT_TRUE (table.initialized ());
+
+    // insert 0 (hash=0, position=0) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (0));
+
+    // make sure the first bucket has the key
+    ASSERT_EQ (table.get_bucket_key_count (0), 1);
+    ASSERT_EQ (table.get_bucket_hash_count (0), 1);
+
+    // insert 0 (hash=0, position=0) and check if the insertion was successful and table key counts are consistent
+    // the key count in the first bucket should now be 1 (a new aggregate node should have been created for this key)
+    ASSERT_TRUE (table.insert (1));
+
+    // make sure the first bucket has the key
+    ASSERT_EQ (table.get_bucket_key_count (1), 1);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+
+    // erase 0 (hash=0, position=0) and check if the deletion was successful and the key counts are consistent
+    ASSERT_TRUE (table.erase (0));
+    ASSERT_EQ (table.size (), 1);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
+
+    // make sure 0 can not be erased again
+    ASSERT_FALSE (table.erase (0));
+
+    // make sure the first bucket does not have any keys
+    ASSERT_EQ (table.get_bucket_key_count (0), 0);
+    ASSERT_EQ (table.get_bucket_hash_count (0), 0);
+
+    // erase 1 (hash=1, position=1) and check if the deletion was successful and the key counts are consistent
+    ASSERT_TRUE (table.erase (1));
+    ASSERT_EQ (table.size (), 0);
+    ASSERT_EQ (table.get_aggregate_count (), 0);
+
+    // make sure 1 can not be erased again
+    ASSERT_FALSE (table.erase (0));
+
+    // make sure the first bucket does not have any keys
+    ASSERT_EQ (table.get_bucket_key_count (1), 0);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 0);
+}
+
