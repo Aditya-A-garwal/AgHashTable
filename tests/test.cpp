@@ -664,3 +664,62 @@ TEST (Erase, multiAggregateMultiNode)
     ASSERT_EQ (table.get_bucket_key_count (2), 0);
     ASSERT_EQ (table.get_bucket_hash_count (2), 0);
 }
+
+/**
+ * @brief                   Test searching with one aggregate node (per bucket, not for all buckets) and one node per aggregate node (no collisions)
+ *
+ */
+TEST (Find, singleAggregateSingleNode)
+{
+    AgHashTable<int64_t, mod2<int64_t>>     table;
+
+    ASSERT_TRUE (table.initialized ());
+
+    // make sure that 0 can not be found in the table before insertion
+    ASSERT_FALSE (table.exists (0));
+    ASSERT_EQ (table.find (0), table.end ());
+
+    // make sure that 1 can not be found in the table before insertion
+    ASSERT_FALSE (table.exists (1));
+    ASSERT_EQ (table.find (1), table.end ());
+
+    // insert 0 (hash=0, position=0) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (0));
+    // insert 1 (hash=1, position=1) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (1));
+
+    // the table should have 2 keys (={0, 1}) and 2 aggregate nodes (={0, 1})
+    ASSERT_EQ (table.size (), 2);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
+
+    // the first bucket should have 1 key (={0}) with one distinct hash value (={0})
+    ASSERT_EQ (table.get_bucket_key_count (0), 1);
+    ASSERT_EQ (table.get_bucket_hash_count (0), 1);
+
+    // the second bucket should have 1 key (={1}) with one distinct hash value (={1})
+    ASSERT_EQ (table.get_bucket_key_count (1), 1);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+
+    // the key 0 should be found in succesfully in the table
+    ASSERT_TRUE (table.exists (0));
+    ASSERT_NE (table.find (0), table.end ());
+    ASSERT_EQ (*(table.find (0)), 0);
+
+    // the key 1 should be found in succesfully in the table
+    ASSERT_TRUE (table.exists (1));
+    ASSERT_NE (table.find (1), table.end ());
+    ASSERT_EQ (*(table.find (1)), 1);
+
+    // make sure both the keys are erased from the table
+    ASSERT_TRUE (table.erase (0));
+    ASSERT_TRUE (table.erase (1));
+
+    // make sure that 0 can not be found in the table after deletion
+    ASSERT_FALSE (table.exists (0));
+    ASSERT_EQ (table.find (0), table.end ());
+
+    // make sure that 1 can not be found in the table after deletion
+    ASSERT_FALSE (table.exists (1));
+    ASSERT_EQ (table.find (1), table.end ());
+}
+
