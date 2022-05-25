@@ -186,6 +186,7 @@ TEST (Insert, singleAggregateSingleNode)
 TEST (Insert, singleAggregateMultiNode)
 {
     AgHashTable<int64_t, mod2<int64_t>>     table;
+    int64_t                                 resizeCountInit;
     int64_t                                 bucketCountInit;
 
     ASSERT_TRUE (table.initialized ());
@@ -217,6 +218,7 @@ TEST (Insert, singleAggregateMultiNode)
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
     bucketCountInit     = (int64_t)table.get_bucket_count ();
+    resizeCountInit     = (int64_t)table.get_resize_count ();
 
     // make sure no other buckets have any keys
     for (int64_t bucket = 1; bucket < bucketCountInit; ++bucket) {
@@ -245,10 +247,11 @@ TEST (Insert, singleAggregateMultiNode)
     ASSERT_EQ (table.get_bucket_hash_count (1), 1);
 
     // the table should not have been resized, but it's okay if it was
-    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_resize_count (), resizeCountInit);
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
     bucketCountInit     = (int64_t)table.get_bucket_count ();
+    resizeCountInit     = (int64_t)table.get_resize_count ();
 
     // make sure no other buckets have any keys
     for (int64_t bucket = 2; bucket < bucketCountInit; ++bucket) {
@@ -367,7 +370,7 @@ TEST (Insert, multiAggregateMultiNode)
     ASSERT_EQ (table.get_bucket_hash_count (2), 2);
 
     // the table should not have been resized, but it's okay if it was
-    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_resize_count (), resizeCountInit);
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
     bucketCountInit     = (int64_t)table.get_bucket_count ();
@@ -462,3 +465,202 @@ TEST (Erase, singleAggregateSingleNode)
     ASSERT_EQ (table.get_bucket_hash_count (1), 0);
 }
 
+/**
+ * @brief                   Test deletion with one aggregate node (per bucket, not for all buckets) and multiple nodes per aggregate node (collisions)
+ *
+ */
+TEST (Erase, singleAggregateMultiNode)
+{
+    AgHashTable<int64_t, mod2<int64_t>>     table;
+
+    ASSERT_TRUE (table.initialized ());
+
+    // insert 0 (hash=0, position=0) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (0));
+    // insert 2 (hash=0, position=0) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (2));
+
+    // insert 1 (hash=1, position=1) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (1));
+    // Insert 3 (hash=1, position=1) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (3));
+
+    // the table should have 4 keys (={0, 2, 1, 3}) and 2 aggregate nodes (={0, 1})
+    ASSERT_EQ (table.size (), 4);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
+
+    // the first bucket should have 2 keys (={0, 2}) with one distinct hash value (={0})
+    ASSERT_EQ (table.get_bucket_key_count (0), 2);
+    ASSERT_EQ (table.get_bucket_hash_count (0), 1);
+
+    // the second bucket should have 2 keys (={1, 3}) with one distinct hash value (={1})
+    ASSERT_EQ (table.get_bucket_key_count (1), 2);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+
+    // try to erase 0 (hash=0, position=0) and check if the deletion was successful
+    // the number of keys should have decreased by 1 while the number of aggregate nodes remain the same
+    ASSERT_TRUE (table.erase (0));
+    ASSERT_EQ (table.size (), 3);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
+
+    // the first bucket should have one less key (={2}) and the same number of aggregate nodes
+    ASSERT_EQ (table.get_bucket_key_count (0), 1);
+    ASSERT_EQ (table.get_bucket_hash_count (0), 1);
+
+    // try to erase 2 (hash=0, position=0) and check if the deletion was successful
+    // the number of keys and aggregate nodes should have each decreased by 1
+    ASSERT_TRUE (table.erase (2));
+    ASSERT_EQ (table.size (), 2);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
+
+    // the first bucket should not have no keys or aggregate nodes
+    ASSERT_EQ (table.get_bucket_key_count (0), 0);
+    ASSERT_EQ (table.get_bucket_hash_count (0), 0);
+
+    // try to erase 1 (hash=1, position=1) and check if the deletion was successful
+    // the number of keys should have decreased by 1 while the number of aggregate nodes remain the same
+    ASSERT_TRUE (table.erase (1));
+    ASSERT_EQ (table.size (), 1);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
+
+    // the first bucket should have one less key (={3}) and the same number of aggregate nodes
+    ASSERT_EQ (table.get_bucket_key_count (1), 1);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+
+    // try to erase 3 (hash=1, position=1) and check if the deletion was successful
+    // the number of keys and aggregate nodes should have each decreased by 1
+    ASSERT_TRUE (table.erase (3));
+    ASSERT_EQ (table.size (), 0);
+    ASSERT_EQ (table.get_aggregate_count (), 0);
+
+    // the first bucket should not have no keys or aggregate nodes
+    ASSERT_EQ (table.get_bucket_key_count (1), 0);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 0);
+}
+
+/**
+ * @brief                   Test deletion with multiple aggregate nodes and multiple nodes per aggregate node
+ *
+ */
+TEST (Erase, multiAggregateMultiNode)
+{
+    AgHashTable<int64_t, abs<int64_t>>      table;
+
+    ASSERT_TRUE (table.initialized ());
+
+    // insert 1 (hash=1, position=1) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (1));
+    // insert -1 (hash=1, position=1) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (-1));
+
+    // insert 1 + bucket count (hash=1 + bucket count, position=1) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (1 + (int64_t)table.get_bucket_count ()));
+    // insert -1 - bucket count (hash=1 + bucket count, position=1) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (-1 - (int64_t)table.get_bucket_count ()));
+
+    // insert 2 (hash=2, position=2) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (2));
+    // insert -2 (hash=2, position=2) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (-2));
+
+    // insert 2 + bucket count (hash=2 + bucket count, position=2) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (2 + (int64_t)table.get_bucket_count ()));
+    // insert -2 - bucket count (hash=2, position=2) and check if the insertion was successful
+    ASSERT_TRUE (table.insert (-2 - (int64_t)table.get_bucket_count ()));
+
+    // the table should have 8 keys (={1, -1, 2, -2, 1 + bucket count, -1 - bucket count, 2 + bucket count, -2 - bucket count}) and 4 aggregate nodes (={1, 1 + bucket count, 2, 2 + bucket count})
+    ASSERT_EQ (table.size (), 8);
+    ASSERT_EQ (table.get_aggregate_count (), 4);
+
+    // the second bucket should have 4 keys (={1, -1, 1 + bucket count, -1 - bucket count}) and 2 aggregate nodes (={1, 1 + bucket count})
+    ASSERT_EQ (table.get_bucket_key_count (1), 4);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 2);
+
+    // the third bucket should have 4 keys (={2, -2, 2 + bucket count, -2 - bucket count}) and 2 aggregate nodes (={2, 2 + bucket count})
+    ASSERT_EQ (table.get_bucket_key_count (2), 4);
+    ASSERT_EQ (table.get_bucket_hash_count (2), 2);
+
+    // the table should not have been resized, but it's okay if it was
+    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_bucket_count (), (int64_t)table.get_bucket_count ());
+
+    // erase 1 (hash=1, position=1) and check if the deletion was successful
+    // the number of keys in the table should have decreased by 1 while the number of aggregate nodes remain the same
+    ASSERT_TRUE (table.erase (1));
+    ASSERT_EQ (table.size (), 7);
+    ASSERT_EQ (table.get_aggregate_count (), 4);
+
+    // the second bucket should have 3 keys (={-1, 1 + bucket count, -1 - bucket count}) and 2 aggregate nodes (={1, 1 + bucket count})
+    ASSERT_EQ (table.get_bucket_key_count (1), 3);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 2);
+
+    // erase -1 (hash=1, position=1) and check if the deletion was successful
+    // the number of keys and aggregate nodes in the table should have decreased by 1
+    ASSERT_TRUE (table.erase (-1));
+    ASSERT_EQ (table.size (), 6);
+    ASSERT_EQ (table.get_aggregate_count (), 3);
+
+    // the second bucket should have 2 keys (={1 + bucket count, -1 - bucket count}) and 1 aggregate node (={1 + bucket count})
+    ASSERT_EQ (table.get_bucket_key_count (1), 2);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+
+    // erase 1 + bucket count (hash=1 + bucket count, position=1) and check if the deletion was successful
+    // the number of keys in the table should have decreased by 1 while the number of aggregate nodes remain the same
+    ASSERT_TRUE (table.erase (1 + (int64_t)table.get_bucket_count ()));
+    ASSERT_EQ (table.size (), 5);
+    ASSERT_EQ (table.get_aggregate_count (), 3);
+
+    // the second bucket should have 1 key (={-1 - bucket count}) and 1 aggregate node (={1 + bucket count})
+    ASSERT_EQ (table.get_bucket_key_count (1), 1);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+
+    // erase -1 - bucket count (hash=1 + bucket count, position=1) and check if the deletion was successful
+    // the number of keys and aggregate nodes in the table should have decreased by 1
+    ASSERT_TRUE (table.erase (-1 - (int64_t)table.get_bucket_count ()));
+    ASSERT_EQ (table.size (), 4);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
+
+    // the second bucket should have no keys left
+    ASSERT_EQ (table.get_bucket_key_count (1), 0);
+    ASSERT_EQ (table.get_bucket_hash_count (1), 0);
+
+    // erase 2 (hash=2, position=2) and check if the deletion was successful
+    // the number of keys in the table should have decreased by 1 while the number of aggregate nodes remain the same
+    ASSERT_TRUE (table.erase (2));
+    ASSERT_EQ (table.size (), 3);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
+
+    // the third bucket should have 3 keys (={-2, 2 + bucket count, -2 - bucket count}) and 2 aggregate node (={2, 2 + bucket count})
+    ASSERT_EQ (table.get_bucket_key_count (2), 3);
+    ASSERT_EQ (table.get_bucket_hash_count (2), 2);
+
+    // erase -2 (hash=2, position=2) and check if the deletion was successful
+    // the number of keys and aggregate nodes in the table should have decreased by 1
+    ASSERT_TRUE (table.erase (-2));
+    ASSERT_EQ (table.size (), 2);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
+
+    // the second bucket should have 2 keys (={2 + bucket count, -2 - bucket count}) and 1 aggregate node (={2 + bucket count})
+    ASSERT_EQ (table.get_bucket_key_count (2), 2);
+    ASSERT_EQ (table.get_bucket_hash_count (2), 1);
+
+    // erase 2 + bucket count (hash=2 + bucket count, position=2) and check if the deletion was successful
+    // the number of keys in the table should have decreased by 1 while the number of aggregate nodes remain the same
+    ASSERT_TRUE (table.erase (2 + (int64_t)table.get_bucket_count ()));
+    ASSERT_EQ (table.size (), 1);
+    ASSERT_EQ (table.get_aggregate_count (), 1);
+
+    // the third bucket should have 1 keys (={-2 - bucket count}) and 1 aggregate node (={2 + bucket count})
+    ASSERT_EQ (table.get_bucket_key_count (2), 1);
+    ASSERT_EQ (table.get_bucket_hash_count (2), 1);
+
+    // erase -2 = bucket count (hash=2 + bucket count, position=2) and check if the deletion was successful
+    // the number of keys and aggregate nodes in the table should have decreased by 1
+    ASSERT_TRUE (table.erase (-2 - (int64_t)table.get_bucket_count ()));
+    ASSERT_EQ (table.size (), 0);
+    ASSERT_EQ (table.get_aggregate_count (), 0);
+
+    // the thid bucket should have no keys left
+    ASSERT_EQ (table.get_bucket_key_count (2), 0);
+    ASSERT_EQ (table.get_bucket_hash_count (2), 0);
+}
