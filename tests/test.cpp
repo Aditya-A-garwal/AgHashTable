@@ -723,3 +723,57 @@ TEST (Find, singleAggregateSingleNode)
     ASSERT_EQ (table.find (1), table.end ());
 }
 
+/**
+ * @brief                   Test searching with on aggregate node (per bucket, not for all buckets) and multiple nodes per aggregate node (collisions)
+ *
+ */
+TEST (Find, singleAggregateMultiNode)
+{
+    AgHashTable<int64_t, abs<int64_t>>      table;
+    int64_t                                 bucketCountInit;
+    int64_t                                 resizeCountInit;
+
+    ASSERT_TRUE (table.initialized ());
+
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
+
+    // make sure none of the keys are found before insertion
+    for (int64_t i = 1; i < 3; ++i) {
+        for (auto &e : {i, -i, i + bucketCountInit, -i - bucketCountInit}) {
+            ASSERT_FALSE (table.exists (e));
+            ASSERT_EQ (table.find (e), table.end ());
+        }
+    }
+
+    // insert the following keys into the table
+    // 1                    (hash=1,                position=1)
+    // -1                   (hash=1,                position=1)
+    // 2                    (hash=2,                position=2)
+    // -2                   (hash=2,                position=2)
+    for (int64_t i = 1; i < 3; ++i) {
+        for (auto &e : {i, -i}) {
+            ASSERT_TRUE (table.insert (e));
+        }
+    }
+
+    // make sure the size of the table and the number of aggregate nodes are correct
+    ASSERT_EQ (table.size (), 4);
+    ASSERT_EQ (table.get_aggregate_count (), 2);
+
+    // the table should not have been resized, but it's okay if it was
+    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
+
+    bucketCountInit     = (int64_t)table.get_bucket_count ();
+    resizeCountInit     = (int64_t)table.get_resize_count ();
+
+    // check if all keys can be found
+    for (int64_t i = 1; i < 3; ++i) {
+        for (auto &e : {i, -i}) {
+            ASSERT_TRUE (table.exists (e));
+            ASSERT_NE (table.find (e), table.end ());
+            ASSERT_EQ (*(table.find (e)), e);
+        }
+    }
+}
+
