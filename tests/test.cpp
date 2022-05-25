@@ -128,6 +128,7 @@ TEST (Insert, duplicates)
 TEST (Insert, singleAggregateSingleNode)
 {
     AgHashTable<int64_t, mod2<int64_t>>     table;
+    int64_t                                 resizeCountInit;
     int64_t                                 bucketCountInit;
 
     ASSERT_TRUE (table.initialized ());
@@ -149,6 +150,7 @@ TEST (Insert, singleAggregateSingleNode)
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
     bucketCountInit     = (int64_t)table.get_bucket_count ();
+    resizeCountInit     = (int64_t)table.get_resize_count ();
 
     // make sure no other bucket has any other keys
     for (int64_t bucket = 1; bucket < bucketCountInit; ++bucket) {
@@ -167,10 +169,11 @@ TEST (Insert, singleAggregateSingleNode)
     ASSERT_EQ (table.get_bucket_hash_count (1), 1);
 
     // the table should not have been resized, but it's okay if it was
-    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_resize_count (), resizeCountInit);
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
     bucketCountInit     = (int64_t)table.get_bucket_count ();
+    resizeCountInit     = (int64_t)table.get_resize_count ();
 
     // make sure no other bucket has any other keys
     for (int64_t bucket = 2; bucket < bucketCountInit; ++bucket) {
