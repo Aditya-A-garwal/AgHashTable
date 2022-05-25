@@ -190,6 +190,7 @@ class AgHashTable {
     uint64_t            get_bucket_key_count    (const uint64_t &pBucketId) const;
     uint64_t            get_bucket_hash_count   (const uint64_t &pBucketId) const;
 
+    uint64_t            get_bucket_of_key       (const key_t &pKey) const;
     // Testing and debugging
 
     DBG_MODE (
@@ -499,6 +500,26 @@ AgHashTable<key_t, tHashFunc, tEquals>::get_bucket_hash_count (const uint64_t &p
     return (pBucketId < mBucketCount) ? (mBucketArray[pBucketId].distinctHashCount) : (0ULL);
 }
 
+/**
+ * @brief                   Returns the bucket in which a key will reside in after insertion
+ *
+ * @param pKey              Key to get the residing bucket of
+ *
+ * @return uint64_t         Bucket in which the supplied key will go into after insertion
+ */
+template <typename key_t, auto tHashFunc, auto tEquals>
+uint64_t
+AgHashTable<key_t, tHashFunc, tEquals>::get_bucket_of_key (const key_t &pKey) const
+{
+    hash_t              keyHash;                                    /** Hash value of the key */
+    uint64_t            bucketId;                                   /** Position of the bucket in which to insert the key */
+
+    // calculate the hash value of the key and find the bucket in which it should be insert into
+    keyHash         = tHashFunc (&pKey);
+    bucketId        = keyHash & (mBucketCount - 1);
+
+    return bucketId;
+}
 
 /**
  * @brief                   Returns if a given key exists in the hash table
