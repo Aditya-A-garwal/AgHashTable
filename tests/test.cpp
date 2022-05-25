@@ -144,6 +144,7 @@ TEST (Insert, singleAggregateSingleNode)
     // the first bucket should have the new key and its aggregate node
     ASSERT_EQ (table.get_bucket_key_count (0), 1);
     ASSERT_EQ (table.get_bucket_hash_count (0), 1);
+    ASSERT_EQ (table.get_bucket_of_key (0), 0);
 
     // the table should not have been resized, but it's okay if it was
     EXPECT_EQ (table.get_resize_count (), 0);
@@ -167,6 +168,7 @@ TEST (Insert, singleAggregateSingleNode)
     // the first bucket should have the new key and its aggregate node
     ASSERT_EQ (table.get_bucket_key_count (1), 1);
     ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+    ASSERT_EQ (table.get_bucket_of_key (1), 1);
 
     // the table should not have been resized, but it's okay if it was
     EXPECT_EQ (table.get_resize_count (), resizeCountInit);
@@ -205,6 +207,7 @@ TEST (Insert, singleAggregateMultiNode)
     // the first bucket should now have 1 key (={0}) and one aggregate node (={0})
     ASSERT_EQ (table.get_bucket_key_count (0), 1);
     ASSERT_EQ (table.get_bucket_hash_count (0), 1);
+    ASSERT_EQ (table.get_bucket_of_key (0), 0);
 
     // insert 0 (hash=0, position=0) and check if the insertion was successful
     // the number of keys should have increased by 1, while the number of aggregate nodes remain the same
@@ -212,9 +215,10 @@ TEST (Insert, singleAggregateMultiNode)
     ASSERT_EQ (table.size (), 2);
     ASSERT_EQ (table.get_aggregate_count (), 1);
 
-    // the first bucket should now have 1 key (={0, 2}) and one aggregate node (={0})
+    // the first bucket should now have 2 keys (={0, 2}) and 1 aggregate node (={0})
     ASSERT_EQ (table.get_bucket_key_count (0), 2);
     ASSERT_EQ (table.get_bucket_hash_count (0), 1);
+    ASSERT_EQ (table.get_bucket_of_key (2), 0);
 
     // the table should not have been resized, but it's okay if it was
     EXPECT_EQ (table.get_resize_count (), 0);
@@ -238,6 +242,7 @@ TEST (Insert, singleAggregateMultiNode)
     // the second bucket should now have 1 key (={1}) and one aggregate node (={1})
     ASSERT_EQ (table.get_bucket_key_count (1), 1);
     ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+    ASSERT_EQ (table.get_bucket_of_key (1), 1);
 
     // insert 3 (hash=1, position=1) and check if the insertion was successful
     // the number of keys should have increased by 1, while the number of aggregate nodes remain the same
@@ -248,6 +253,7 @@ TEST (Insert, singleAggregateMultiNode)
     // the second bucket should now have 1 key (={0, 2}) and one aggregate node (={0})
     ASSERT_EQ (table.get_bucket_key_count (1), 2);
     ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+    ASSERT_EQ (table.get_bucket_of_key (3), 1);
 
     // the table should not have been resized, but it's okay if it was
     EXPECT_EQ (table.get_resize_count (), resizeCountInit);
@@ -286,6 +292,7 @@ TEST (Insert, multiAggregateMultiNode)
     // the second bucket should now have 1 key (={1}) and 1 aggregate node (={1})
     ASSERT_EQ (table.get_bucket_key_count (1), 1);
     ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+    ASSERT_EQ (table.get_bucket_of_key (1), 1);
 
     // insert -1 (hash=1, position=1) and check if the insertion was successful
     // the number of keys in the table should have increased by 1, while the number of aggregate nodes remain the same
@@ -296,6 +303,7 @@ TEST (Insert, multiAggregateMultiNode)
     // the second bucket should now have 2 keys (={1, -1}) and 1 aggregate node (={1})
     ASSERT_EQ (table.get_bucket_key_count (1), 2);
     ASSERT_EQ (table.get_bucket_hash_count (1), 1);
+    ASSERT_EQ (table.get_bucket_of_key (-1), 1);
 
     // insert 2 (hash=2, position=2) and check if the insertion was successful
     // the number of keys and aggregate nodes in the table should have incerased by 1 (a new aggregate node should have been created for this key)
@@ -306,6 +314,7 @@ TEST (Insert, multiAggregateMultiNode)
     // the third bucket should now have 1 key (={2}) and 1 aggregate node (={2})
     ASSERT_EQ (table.get_bucket_key_count (2), 1);
     ASSERT_EQ (table.get_bucket_hash_count (2), 1);
+    ASSERT_EQ (table.get_bucket_of_key (2), 2);
 
     // insert -2 (hash=2, position=2) and check if the insertion was successful
     // the number of keys in the table should have increased by 1, while the number of aggregate nodes remain the same
@@ -316,6 +325,7 @@ TEST (Insert, multiAggregateMultiNode)
     // the third bucket should now have 2 keys (={2, -2}) and 1 aggregate node (={2})
     ASSERT_EQ (table.get_bucket_key_count (2), 2);
     ASSERT_EQ (table.get_bucket_hash_count (2), 1);
+    ASSERT_EQ (table.get_bucket_of_key (-2), 2);
 
     // the table should not have been resized, but it's okay if it was
     EXPECT_EQ (table.get_resize_count (), 0);
@@ -341,6 +351,7 @@ TEST (Insert, multiAggregateMultiNode)
     // the second bucket should now have 3 keys (={1, -1, 1 + bucket count}) and 2 aggregate nodes (={1, 1 + bucket count})
     ASSERT_EQ (table.get_bucket_key_count (1), 3);
     ASSERT_EQ (table.get_bucket_hash_count (1), 2);
+    ASSERT_EQ (table.get_bucket_of_key (1 + bucketCountInit), 1);
 
     // insert -1 - bucket count (hash=1 + bucket count, position=1) and check if the insertion was successful
     // the number of keys in the table should have increased by 1, while the number of aggregate nodes remain the same
@@ -351,6 +362,7 @@ TEST (Insert, multiAggregateMultiNode)
     // the second bucket should now have 4 keys (={1, -1, 1 + bucket count, -1 - bucket count}) and 2 aggregate nodes (={1, 1 + bucket count})
     ASSERT_EQ (table.get_bucket_key_count (1), 4);
     ASSERT_EQ (table.get_bucket_hash_count (1), 2);
+    ASSERT_EQ (table.get_bucket_of_key (-1 - bucketCountInit), 1);
 
     // insert 2 + bucket count (hash=2 + bucket count, position=2) and check if the insertion was successful
     // the number of keys and aggregate nodes in the table should have incerased by 1 (a new aggregate node should have been created for this key)
@@ -361,6 +373,7 @@ TEST (Insert, multiAggregateMultiNode)
     // the third bucket should now have 3 keys (={2, -2, 2 + bucket count}) and 2 aggregate nodes (={2, 2 + bucket count})
     ASSERT_EQ (table.get_bucket_key_count (2), 3);
     ASSERT_EQ (table.get_bucket_hash_count (2), 2);
+    ASSERT_EQ (table.get_bucket_of_key (2 + bucketCountInit), 2);
 
     // insert -2 - bucket count (hash=2, position=2) and check if the insertion was successful
     // the number of keys in the table should have increased by 1, while the number of aggregate nodes remain the same
@@ -371,6 +384,7 @@ TEST (Insert, multiAggregateMultiNode)
     // the third bucket should now have 4 key (={2, -2, 2 + bucket count, -2 - bucket count}) and 2 aggregate nodes (={2, 2 + bucket count})
     ASSERT_EQ (table.get_bucket_key_count (2), 4);
     ASSERT_EQ (table.get_bucket_hash_count (2), 2);
+    ASSERT_EQ (table.get_bucket_of_key (-2 - bucketCountInit), 2);
 
     // the table should not have been resized, but it's okay if it was
     EXPECT_EQ (table.get_resize_count (), resizeCountInit);
