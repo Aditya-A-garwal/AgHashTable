@@ -777,3 +777,68 @@ TEST (Find, singleAggregateMultiNode)
     }
 }
 
+/**
+ * @brief                   Test searching with multiple aggregate nodes and multiple nodes per aggregate node
+ *
+ */
+TEST (Find, multiAggregateMultiNode)
+{
+    AgHashTable<int64_t, abs<int64_t>>      table;
+
+    ASSERT_TRUE (table.initialized ());
+
+    // make sure the keys can not be found before insertion
+    for (int64_t i = 1; i < 3; ++i) {
+        for (auto &e : {i, -i, i + (int64_t)table.get_bucket_count (), -i - (int64_t)table.get_bucket_count ()}) {
+            ASSERT_FALSE (table.exists (e));
+            ASSERT_EQ (table.find (e), table.end ());
+        }
+    }
+
+    // insert the following keys into the table
+    // 1                    (hash=1,                position=1)
+    // -1                   (hash=1,                position=1)
+    // 1 + bucket count     (hash=1 + bucket count, position=1)
+    // -1 - bucket count    (hash=1 + bucket count, position=1)
+    // 2                    (hash=2,                position=2)
+    // -2                   (hash=2,                position=2)
+    // 2                    (hash=2 + bucket count, position=2)
+    // -2                   (hash=2 + bucket count, position=2)
+    for (int64_t i = 1; i < 3; ++i) {
+        for (auto &e : {i, -i, i + (int64_t)table.get_bucket_count (), -i - (int64_t)table.get_bucket_count ()}) {
+            ASSERT_TRUE (table.insert (e));
+        }
+    }
+
+    // the table should have 8 keys and 4 aggregate nodes now
+    ASSERT_EQ (table.size (), 8);
+    ASSERT_EQ (table.get_aggregate_count (), 4);
+
+    // the table should not have been resized, but it's okay if it was
+    EXPECT_EQ (table.get_resize_count (), 0);
+    EXPECT_EQ (table.get_bucket_count (), (int64_t)table.get_bucket_count ());
+
+    // check if all keys can be found
+    for (int64_t i = 1; i < 3; ++i) {
+        for (auto &e : {i, -i, i + (int64_t)table.get_bucket_count (), -i - (int64_t)table.get_bucket_count ()}) {
+            ASSERT_TRUE (table.exists (e));
+            ASSERT_NE (table.find (e), table.end ());
+            ASSERT_EQ (*(table.find (e)), e);
+        }
+    }
+
+    // erase all keys
+    for (int64_t i = 1; i < 3; ++i) {
+        for (auto &e : {i, -i, i + (int64_t)table.get_bucket_count (), -i - (int64_t)table.get_bucket_count ()}) {
+            ASSERT_TRUE (table.erase (e));
+        }
+    }
+
+    // make sure the keys can not be found after deletion
+    for (int64_t i = 1; i < 3; ++i) {
+        for (auto &e : {i, -i, i + (int64_t)table.get_bucket_count (), -i - (int64_t)table.get_bucket_count ()}) {
+            ASSERT_FALSE (table.exists (e));
+            ASSERT_EQ (table.find (e), table.end ());
+        }
+    }
+}
