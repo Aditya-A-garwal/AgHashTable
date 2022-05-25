@@ -131,11 +131,9 @@ class AgHashTable {
     static constexpr uint64_t   sNumKeysAllowed         = 16ULL;                        /** Number of keys allowed in a bucket before resizing is considered */
     static constexpr uint64_t   sResizeFactor           = 8ULL;                         /** Factor by which the size of the hash table grows */
 
-    static constexpr uint64_t   sMaxBucketsAllowed      = (sHashBitness == 64) ?        /** Maxmimum number of buckets allowed in the hash table */
-                                                            (1ULL << 24) :
-                                                            ((sHashBitness > 24) ?
-                                                            (1ULL << 24) :
-                                                            (1ULL << sHashBitness));
+    static constexpr uint64_t   sMaxBucketsAllowed      = 1ULL << ((sHashBitness > 24)? /** Maxmimum number of buckets allowed in the hash table */
+                                                                    (24)
+                                                                    : (sHashBitness));
 
 
 
