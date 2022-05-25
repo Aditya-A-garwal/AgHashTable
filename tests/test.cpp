@@ -8,6 +8,9 @@
  *                  This means that the bucket at position 0 is called the first bucket, while the bucket at position 1 is called the second bucket
  */
 
+//! test allocations as well
+//! it should be possible to manually specify the bitness of the hash function
+
 #include <gtest/gtest.h>
 #include <type_traits>
 #include <limits>
@@ -748,7 +751,6 @@ TEST (Find, singleAggregateMultiNode)
 {
     AgHashTable<int64_t, abs<int64_t>>      table;
     int64_t                                 bucketCountInit;
-    int64_t                                 resizeCountInit;
 
     ASSERT_TRUE (table.initialized ());
 
@@ -782,7 +784,6 @@ TEST (Find, singleAggregateMultiNode)
     EXPECT_EQ (table.get_bucket_count (), bucketCountInit);
 
     bucketCountInit     = (int64_t)table.get_bucket_count ();
-    resizeCountInit     = (int64_t)table.get_resize_count ();
 
     // check if all keys can be found
     for (int64_t i = 1; i < 3; ++i) {
